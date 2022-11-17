@@ -1,0 +1,22 @@
+{
+	"mysql.master.alias": "master",
+	"mysql.master.username": "root",
+	"mysql.master.password": "root",
+	"mysql.master.db.url": "jdbc:mysql://root:root@localhost:3307/core_engine",
+	"mysql.master.db.name": "core_engine",
+	"mysql.master.port": "3307",
+	"mysql.slave.alias": "slave",
+	"mysql.slave.username": "root",
+	"mysql.slave.password": "root",
+	"mysql.slave.db.url": "jdbc:mysql://root:root@localhost:3307/core_engine",
+	"mysql.slave.db.name": "core_engine",
+	"mysql.slave.port": "3307",
+	"mysql.driver": "com.mysql.cj.jdbc.Driver",
+	"api.version": "1",
+	"redis.standalone.node": "127.0.0.1:8001",
+	"redis.cluster.nodes": "127.0.0.1:8001,127.0.0.1:8002,127.0.0.1:8003,127.0.0.1:8004,127.0.0.1:8005,127.0.0.1:8006",
+	"async.threadpool.maxpoolsize": "20",
+	"async.threadpool.corepoolsize": "5",
+	"async.threadpool.queuecapacity": "5000",
+	"async.threadpool.await.termination.seconds": "60"
+}
