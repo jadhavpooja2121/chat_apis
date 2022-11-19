@@ -14,7 +14,7 @@ public class AsyncConfig {
   private Configurator configurator;
 
   @Bean(name = "apiTaskExecutor")
-  private ThreadPoolTaskExecutor asyncExecutor() {
+  public ThreadPoolTaskExecutor asyncExecutor() {
     ThreadPoolTaskExecutor threadPoolTaskExecutor = new ThreadPoolTaskExecutor();
     threadPoolTaskExecutor
         .setMaxPoolSize(configurator.getInt(PropertyConstants.ASYNC_THREAD_POOL_MAX_POOL_SIZE,
