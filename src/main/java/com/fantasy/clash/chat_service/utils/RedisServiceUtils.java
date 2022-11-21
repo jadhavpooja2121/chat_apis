@@ -12,4 +12,8 @@ public class RedisServiceUtils {
   public static String userLastReadHashKey(Long contestId) {
     return RedisUtils.getKey(RedisConstants.USER_LAST_READ_HASH_KEY, contestId);
   }
+
+  public static String messagecounterKey(String username) {
+    return RedisUtils.getKey(RedisConstants.MESSAGE_COUNTER_KEY, username);
+  }
 }

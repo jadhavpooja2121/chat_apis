@@ -1,12 +1,15 @@
 package com.fantasy.clash.chat_service.services;
 
+import java.text.DateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TimeZone;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -17,11 +20,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import com.fantasy.clash.chat_service.constants.RedisConstants;
+import com.fantasy.clash.chat_service.dos.GetMessageResponseDO;
 import com.fantasy.clash.chat_service.dos.SendMessageDO;
 import com.fantasy.clash.chat_service.utils.RedisServiceUtils;
 import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
 import com.fantasy.clash.framework.http.dos.OkResponseDO;
 import com.fantasy.clash.framework.redis.cluster.ClusteredRedis;
+import com.fantasy.clash.framework.utils.CollectionUtils;
 import com.fantasy.clash.framework.utils.JacksonUtils;
 import com.fantasy.clash.framework.utils.StringUtils;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -51,41 +56,94 @@ public class GroupChatService {
   @Async("apiTaskExecutor")
   public void getMessage(Long contestId, String username, CompletableFuture<ResponseEntity<?>> cf) {
     try {
-      Set<String> messages = redis.zrange(RedisConstants.REDIS_ALIAS,
-          RedisServiceUtils.contestGroupChatKey(contestId), 1668766871291L, 1668767718948L);
-      logger.info("members {}", messages);
-      Set<TypedTuple<String>> memberAndScore = redis.zrangeWithScores(RedisConstants.REDIS_ALIAS,
-          RedisServiceUtils.contestGroupChatKey(contestId), 0, 10);
-      logger.info("memeber, score {}", memberAndScore);
 
-      Set<TypedTuple<String>> userMessages = memberAndScore.stream()
-          .filter(tuple -> tuple.getValue().contains(username)).collect(Collectors.toSet());
-      logger.info("usrMsgs:{}", userMessages);
-      Map<Double, String> usernameMsg = new HashMap<>();
-      for (TypedTuple<String> val : userMessages) {
-        usernameMsg.put(val.getScore(), val.getValue());
-      }
-      logger.info("map <time, val> :{}", usernameMsg);
+      String lastReadTimestamp = redis.hget(RedisConstants.REDIS_ALIAS,
+          RedisServiceUtils.userLastReadHashKey(contestId), username);
+      logger.info("user lastReadtime {}", lastReadTimestamp);
+      // get from core engine
+      Long min = 1669005539642L;
+      Long max = 1669070339000L;
+      if (lastReadTimestamp == null) {
+        // TODO: change count to 100
+        Set<TypedTuple<String>> membersWithScores =
+            redis.zrangeByScoreWithOffset(RedisConstants.REDIS_ALIAS,
+                RedisServiceUtils.contestGroupChatKey(contestId), min, max, 0, 3);
+        logger.info("membersWithScores {}", membersWithScores);
 
-      List<Double> timestamplist = new ArrayList<>();
-      for (Map.Entry<Double, String> valMap : usernameMsg.entrySet()) {
-        logger.info("username1:{}",
-            JacksonUtils.fromJson(valMap.getValue(), SendMessageDO.class).getUsername());
-        logger.info("username2 {}", username.toString().replace("\"", ""));
-        if (JacksonUtils.fromJson(valMap.getValue(), SendMessageDO.class).getUsername()
-            .equals(username.toString().replace("\"", ""))) {
+        Map<Double, String> usernameMsgTimestampMap = new HashMap<>();
+        for (TypedTuple<String> val : membersWithScores) {
+          usernameMsgTimestampMap.put(val.getScore(), val.getValue());
+        }
+        logger.info("map <time, val> :{}", usernameMsgTimestampMap);
+
+        List<Double> userMsgsTimestampList = new ArrayList<>();
+        for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
           Double latestTimestamp = valMap.getKey();
           logger.info("latestTimestamp:{}", latestTimestamp);
-          timestamplist.add(latestTimestamp);
-        } else {
-          continue;
+          userMsgsTimestampList.add(latestTimestamp);
         }
+        logger.info("userMsgsTimestampList:{}", userMsgsTimestampList);
+        Long lastreadtime = Collections.max(userMsgsTimestampList).longValue();
+        logger.info("lastRead:{}", lastreadtime);
+
+        redis.hmset(RedisConstants.REDIS_ALIAS, RedisServiceUtils.userLastReadHashKey(contestId),
+            username, lastreadtime.toString());
+
+        List<SendMessageDO> messages = usernameMsgTimestampMap.values().stream().map(str -> {
+          try {
+            return JacksonUtils.fromJson(str, SendMessageDO.class);
+          } catch (Exception e) {
+            e.printStackTrace();
+          }
+          return null;
+        }).collect(Collectors.toList());
+        logger.info("all messages list:{}", messages);
+
+        cf.complete(ResponseEntity.ok(new OkResponseDO<>(new GetMessageResponseDO(messages))));
+        return;
+      } else {
+
+        String prevReadtime = redis.hget(RedisConstants.REDIS_ALIAS,
+            RedisServiceUtils.userLastReadHashKey(contestId), username);
+        logger.info("user lastReadtime {}", prevReadtime);
+
+
+        min = Long.valueOf(prevReadtime).longValue();
+        Set<TypedTuple<String>> membersWithScores1 =
+            redis.zrangeByScoreWithOffset(RedisConstants.REDIS_ALIAS,
+                RedisServiceUtils.contestGroupChatKey(contestId), min, max, 1, 3);
+        logger.info("membersWithScores {}", membersWithScores1);
+
+        Map<Double, String> usernameMsgTimestampMap = new HashMap<>();
+        for (TypedTuple<String> val : membersWithScores1) {
+          usernameMsgTimestampMap.put(val.getScore(), val.getValue());
+        }
+        logger.info("map <time, val> :{}", usernameMsgTimestampMap);
+
+        List<Double> userMsgsTimestampList = new ArrayList<>();
+        for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
+          Double latestTimestamp = valMap.getKey();
+          logger.info("latestTimestamp:{}", latestTimestamp);
+          userMsgsTimestampList.add(latestTimestamp);
+        }
+        logger.info("userMsgsTimestampList:{}", userMsgsTimestampList);
+        Long lastreadtime = Collections.max(userMsgsTimestampList).longValue();
+        logger.info("lastRead:{}", lastreadtime);
+        redis.hmset(RedisConstants.REDIS_ALIAS, RedisServiceUtils.userLastReadHashKey(contestId),
+            username, lastreadtime.toString());
+
+        List<SendMessageDO> messages = usernameMsgTimestampMap.values().stream().map(str -> {
+          try {
+            return JacksonUtils.fromJson(str, SendMessageDO.class);
+          } catch (Exception e) {
+            e.printStackTrace();
+          }
+          return null;
+        }).collect(Collectors.toList());
+        logger.info("all messages list:{}", messages);
+
+        cf.complete(ResponseEntity.ok(new OkResponseDO<>(new GetMessageResponseDO(messages))));
       }
-      logger.info("timestamplist:{}", timestamplist);
-      Double lastreadtime = Collections.max(timestamplist);
-      logger.info("lastRead:{}", lastreadtime);
-      redis.hmset(RedisConstants.REDIS_ALIAS, RedisServiceUtils.userLastReadHashKey(contestId),
-          username, lastreadtime.toString());
     } catch (Exception e) {
       logger.error(StringUtils.printStackTrace(e));
     }
