@@ -110,4 +110,38 @@ public class GroupChatController extends BaseController {
     }
     return df;
   }
+  
+  @GetMapping(value = "/message-notify", produces = MediaType.APPLICATION_JSON_VALUE)
+  public DeferredResult<ResponseEntity<?>> notify(@PathVariable Long contestId,
+      @RequestParam String username, HttpServletRequest request) {
+    Long startTime = System.currentTimeMillis();
+    String apiEndPoint = "/chat_service/{contestId}/message-notify";
+    DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
+    try {
+      LoginContext loginContext = getLoginContext(request);
+      logger.debug("Received read messge request from {} ", loginContext.getUserId());
+      CompletableFuture<ResponseEntity<?>> cf = new CompletableFuture<ResponseEntity<?>>();
+      ErrorResponseDO contestIdValidationDO = RequestValidator.validateContestId(contestId);
+      if (contestIdValidationDO != null) {
+        cf.complete(ResponseEntity.ok(contestIdValidationDO));
+        this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
+        return df;
+      }
+      // validate username
+      groupChatService.notify(contestId, username, cf);
+      this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
+    } catch (Exception e) {
+      logger.error("Send message request failed due to {}", StringUtils.printStackTrace(e));
+      ErrorResponse errorResponse = new ErrorResponse();
+      if (e instanceof InvalidLoginContextHeaderException) {
+        errorResponse.setCode(ErrorConstants.LOGIN_CONTEXT_HEADER_ERROR_CODE);
+        errorResponse.setMessage(ErrorMessages.UNKNOWN_ERROR_MESSAGE);
+      } else {
+        errorResponse.setCode(ErrorConstants.UNKNOWN_ERROR_CODE);
+        errorResponse.setMessage(ErrorMessages.UNKNOWN_ERROR_MESSAGE);
+      }
+      df.setResult(ResponseEntity.ok(errorResponse));
+    }
+    return df;
+  }
 }

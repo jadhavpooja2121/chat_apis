@@ -1,15 +1,11 @@
 package com.fantasy.clash.chat_service.services;
 
-import java.text.DateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
-import java.util.TimeZone;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -19,18 +15,20 @@ import org.springframework.data.redis.core.ZSetOperations.TypedTuple;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import com.fantasy.clash.chat_service.constants.RedisConstants;
+import com.fantasy.clash.chat_service.constants.ResponseErrorCodes;
+import com.fantasy.clash.chat_service.constants.ResponseErrorMessages;
 import com.fantasy.clash.chat_service.dos.GetMessageResponseDO;
+import com.fantasy.clash.chat_service.dos.MessageNotificationDO;
 import com.fantasy.clash.chat_service.dos.SendMessageDO;
 import com.fantasy.clash.chat_service.utils.RedisServiceUtils;
 import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
+import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
 import com.fantasy.clash.framework.http.dos.OkResponseDO;
 import com.fantasy.clash.framework.redis.cluster.ClusteredRedis;
-import com.fantasy.clash.framework.utils.CollectionUtils;
 import com.fantasy.clash.framework.utils.JacksonUtils;
 import com.fantasy.clash.framework.utils.StringUtils;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
 
 @Service
 public class GroupChatService {
@@ -60,7 +58,7 @@ public class GroupChatService {
       String lastReadTimestamp = redis.hget(RedisConstants.REDIS_ALIAS,
           RedisServiceUtils.userLastReadHashKey(contestId), username);
       logger.info("user lastReadtime {}", lastReadTimestamp);
-      // get from core engine
+      // TODO: get contest start, end time from core engine
       Long min = 1669005539642L;
       Long max = 1669070339000L;
       if (lastReadTimestamp == null) {
@@ -69,6 +67,12 @@ public class GroupChatService {
             redis.zrangeByScoreWithOffset(RedisConstants.REDIS_ALIAS,
                 RedisServiceUtils.contestGroupChatKey(contestId), min, max, 0, 3);
         logger.info("membersWithScores {}", membersWithScores);
+
+        if (CollectionUtils.isEmpty(membersWithScores)) {
+          ErrorResponseDO noMessagesResponseDO = new ErrorResponseDO(
+              ResponseErrorCodes.EMPTY_GROUP_CHAT, ResponseErrorMessages.EMPTY_GROUP_CHAT);
+          cf.complete(ResponseEntity.ok(noMessagesResponseDO));
+        }
 
         Map<Double, String> usernameMsgTimestampMap = new HashMap<>();
         for (TypedTuple<String> val : membersWithScores) {
@@ -93,7 +97,7 @@ public class GroupChatService {
           try {
             return JacksonUtils.fromJson(str, SendMessageDO.class);
           } catch (Exception e) {
-            e.printStackTrace();
+            logger.info("Exception due to {}", StringUtils.printStackTrace(e));
           }
           return null;
         }).collect(Collectors.toList());
@@ -106,7 +110,6 @@ public class GroupChatService {
         String prevReadtime = redis.hget(RedisConstants.REDIS_ALIAS,
             RedisServiceUtils.userLastReadHashKey(contestId), username);
         logger.info("user lastReadtime {}", prevReadtime);
-
 
         min = Long.valueOf(prevReadtime).longValue();
         Set<TypedTuple<String>> membersWithScores1 =
@@ -136,7 +139,7 @@ public class GroupChatService {
           try {
             return JacksonUtils.fromJson(str, SendMessageDO.class);
           } catch (Exception e) {
-            e.printStackTrace();
+            logger.info("Exception due to {}", StringUtils.printStackTrace(e));
           }
           return null;
         }).collect(Collectors.toList());
@@ -146,6 +149,28 @@ public class GroupChatService {
       }
     } catch (Exception e) {
       logger.error(StringUtils.printStackTrace(e));
+    }
+  }
+
+  @Async("apiTaskExecutor")
+  public void notify(Long contestId, String username, CompletableFuture<ResponseEntity<?>> cf) {
+
+    try {
+      String prevReadtime = redis.hget(RedisConstants.REDIS_ALIAS,
+          RedisServiceUtils.userLastReadHashKey(contestId), username);
+      logger.info("user lastReadtime {}", prevReadtime);
+      Long min = Long.valueOf(prevReadtime).longValue();
+      Long max = 1669070339000L;
+
+      long messageCnt = redis.zcount(RedisConstants.REDIS_ALIAS,
+          RedisServiceUtils.contestGroupChatKey(contestId), min, max);
+      logger.info("unread message count:{}", messageCnt);
+
+      MessageNotificationDO messageNotificationDO = new MessageNotificationDO();
+      messageNotificationDO.setMessageCnt(messageCnt);
+      cf.complete(ResponseEntity.ok(new OkResponseDO<>(messageNotificationDO)));
+    } catch (Exception e) {
+      logger.info("Exception due to {}", StringUtils.printStackTrace(e));
     }
   }
 }
