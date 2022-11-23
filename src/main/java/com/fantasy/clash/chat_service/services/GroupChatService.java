@@ -1,5 +1,6 @@
 package com.fantasy.clash.chat_service.services;
 
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -22,6 +23,7 @@ import com.fantasy.clash.chat_service.constants.ResponseErrorMessages;
 import com.fantasy.clash.chat_service.dos.GetMessageResponseDO;
 import com.fantasy.clash.chat_service.dos.MessageNotificationDO;
 import com.fantasy.clash.chat_service.dos.SendMessageDO;
+import com.fantasy.clash.chat_service.dos.SendMessageResponseDO;
 import com.fantasy.clash.chat_service.utils.RedisServiceUtils;
 import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
 import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
@@ -52,21 +54,22 @@ public class GroupChatService {
   }
 
   @Async("apiTaskExecutor")
-  public void getMessage(Long contestId, String username, CompletableFuture<ResponseEntity<?>> cf) {
+  public void getMessage(Long contestId, String username, Long timestamp, boolean isNext,
+      CompletableFuture<ResponseEntity<?>> cf) {
     try {
-
       String lastReadTimestamp = redis.hget(RedisConstants.REDIS_ALIAS,
-          RedisServiceUtils.userLastReadHashKey(contestId), username);
+          RedisServiceUtils.userLastReadTimestampKey(contestId), username);
       logger.info("user lastReadtime {}", lastReadTimestamp);
-      // TODO: get contest start, end time from core engine
-      Long min = 1669005539642L;
-      Long max = 1669070339000L;
+      Long min = timestamp;
+      logger.info("conversion of sql timestamp to long {}", min);
+      Long max = Long.MAX_VALUE;
       if (lastReadTimestamp == null) {
         // TODO: change count to 100
         Set<TypedTuple<String>> membersWithScores =
-            redis.zrangeByScoreWithOffset(RedisConstants.REDIS_ALIAS,
+            redis.zrangeByScoreWithScores(RedisConstants.REDIS_ALIAS,
                 RedisServiceUtils.contestGroupChatKey(contestId), min, max, 0, 3);
         logger.info("membersWithScores {}", membersWithScores);
+
 
         if (CollectionUtils.isEmpty(membersWithScores)) {
           ErrorResponseDO noMessagesResponseDO = new ErrorResponseDO(
@@ -90,14 +93,24 @@ public class GroupChatService {
         Long lastreadtime = Collections.max(userMsgsTimestampList).longValue();
         logger.info("lastRead:{}", lastreadtime);
 
-        redis.hmset(RedisConstants.REDIS_ALIAS, RedisServiceUtils.userLastReadHashKey(contestId),
-            username, lastreadtime.toString());
+        List<SendMessageResponseDO> messageList = new ArrayList<>();
+        for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
+          SendMessageDO sendMessageDO =
+              JacksonUtils.fromJson(valMap.getValue(), SendMessageDO.class);
+          messageList.add(new SendMessageResponseDO(sendMessageDO.getUsername(),
+              sendMessageDO.getMessage(), valMap.getKey().longValue(), true));
+        }
+
+        logger.info("messageList {}",JacksonUtils.toJson(messageList));
+        redis.hmset(RedisConstants.REDIS_ALIAS,
+            RedisServiceUtils.userLastReadTimestampKey(contestId), username,
+            lastreadtime.toString());
 
         List<SendMessageDO> messages = usernameMsgTimestampMap.values().stream().map(str -> {
           try {
             return JacksonUtils.fromJson(str, SendMessageDO.class);
           } catch (Exception e) {
-            logger.info("Exception due to {}", StringUtils.printStackTrace(e));
+            logger.error("Exception due to {}", StringUtils.printStackTrace(e));
           }
           return null;
         }).collect(Collectors.toList());
@@ -108,12 +121,12 @@ public class GroupChatService {
       } else {
 
         String prevReadtime = redis.hget(RedisConstants.REDIS_ALIAS,
-            RedisServiceUtils.userLastReadHashKey(contestId), username);
+            RedisServiceUtils.userLastReadTimestampKey(contestId), username);
         logger.info("user lastReadtime {}", prevReadtime);
 
         min = Long.valueOf(prevReadtime).longValue();
         Set<TypedTuple<String>> membersWithScores1 =
-            redis.zrangeByScoreWithOffset(RedisConstants.REDIS_ALIAS,
+            redis.zrangeByScoreWithScores(RedisConstants.REDIS_ALIAS,
                 RedisServiceUtils.contestGroupChatKey(contestId), min, max, 1, 3);
         logger.info("membersWithScores {}", membersWithScores1);
 
@@ -132,14 +145,15 @@ public class GroupChatService {
         logger.info("userMsgsTimestampList:{}", userMsgsTimestampList);
         Long lastreadtime = Collections.max(userMsgsTimestampList).longValue();
         logger.info("lastRead:{}", lastreadtime);
-        redis.hmset(RedisConstants.REDIS_ALIAS, RedisServiceUtils.userLastReadHashKey(contestId),
-            username, lastreadtime.toString());
+        redis.hmset(RedisConstants.REDIS_ALIAS,
+            RedisServiceUtils.userLastReadTimestampKey(contestId), username,
+            lastreadtime.toString());
 
         List<SendMessageDO> messages = usernameMsgTimestampMap.values().stream().map(str -> {
           try {
             return JacksonUtils.fromJson(str, SendMessageDO.class);
           } catch (Exception e) {
-            logger.info("Exception due to {}", StringUtils.printStackTrace(e));
+            logger.error("Exception due to {}", StringUtils.printStackTrace(e));
           }
           return null;
         }).collect(Collectors.toList());
@@ -157,7 +171,7 @@ public class GroupChatService {
 
     try {
       String prevReadtime = redis.hget(RedisConstants.REDIS_ALIAS,
-          RedisServiceUtils.userLastReadHashKey(contestId), username);
+          RedisServiceUtils.userLastReadTimestampKey(contestId), username);
       logger.info("user lastReadtime {}", prevReadtime);
       Long min = Long.valueOf(prevReadtime).longValue();
       Long max = 1669070339000L;
@@ -166,11 +180,18 @@ public class GroupChatService {
           RedisServiceUtils.contestGroupChatKey(contestId), min, max);
       logger.info("unread message count:{}", messageCnt);
 
+      if (messageCnt == 0) {
+        ErrorResponseDO noNewMessageREsponseDO = new ErrorResponseDO(
+            ResponseErrorCodes.NO_NEW_MESSAGE, ResponseErrorMessages.NO_NEW_MESSAGE);
+        cf.complete(ResponseEntity.ok(noNewMessageREsponseDO));
+        return;
+      }
+
       MessageNotificationDO messageNotificationDO = new MessageNotificationDO();
       messageNotificationDO.setMessageCnt(messageCnt);
       cf.complete(ResponseEntity.ok(new OkResponseDO<>(messageNotificationDO)));
     } catch (Exception e) {
-      logger.info("Exception due to {}", StringUtils.printStackTrace(e));
+      logger.error("Exception due to {}", StringUtils.printStackTrace(e));
     }
   }
 }

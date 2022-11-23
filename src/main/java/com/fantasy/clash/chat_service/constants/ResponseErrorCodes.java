@@ -8,4 +8,7 @@ public class ResponseErrorCodes {
   public static final Integer SEND_MESSSAGE_REQUEST_INVALID = 1101;
   public static final Integer CONTEST_ID_INVALID = 1104;
   public static final Integer EMPTY_GROUP_CHAT = 1111;
+  public static final Integer NO_NEW_MESSAGE = 1113;
+  public static final Integer INVALID_USERNAME = 1115;
+  public static final Integer INVALID_TIMESTAMP = 1117;
 }
