@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -81,7 +82,7 @@ public class GroupChatService {
           return;
         }
 
-        Map<Double, String> usernameMsgTimestampMap = new HashMap<>();
+        Map<Double, String> usernameMsgTimestampMap = new TreeMap<Double, String>();
         for (TypedTuple<String> val : membersWithScores) {
           usernameMsgTimestampMap.put(val.getScore(), val.getValue());
         }
@@ -135,7 +136,7 @@ public class GroupChatService {
             return;
           }
 
-          Map<Double, String> usernameMsgTimestampMap = new HashMap<>();
+          Map<Double, String> usernameMsgTimestampMap = new TreeMap<Double, String>();
           for (TypedTuple<String> val : nextMessagesWithScores) {
             usernameMsgTimestampMap.put(val.getScore(), val.getValue());
           }
@@ -189,7 +190,7 @@ public class GroupChatService {
             return;
           }
 
-          Map<Double, String> usernameMsgTimestampMap = new HashMap<>();
+          Map<Double, String> usernameMsgTimestampMap = new TreeMap<Double, String>();
           for (TypedTuple<String> val : preMessagesWithScores) {
             usernameMsgTimestampMap.put(val.getScore(), val.getValue());
           }
@@ -256,7 +257,7 @@ public class GroupChatService {
       }
 
       MessageNotificationDO messageNotificationDO = new MessageNotificationDO();
-      messageNotificationDO.setMessageCnt(messageCnt);
+      messageNotificationDO.setMessageCnt(messageCnt-1);
       cf.complete(ResponseEntity.ok(new OkResponseDO<>(messageNotificationDO)));
     } catch (Exception e) {
       logger.error("Exception due to {}", StringUtils.printStackTrace(e));
