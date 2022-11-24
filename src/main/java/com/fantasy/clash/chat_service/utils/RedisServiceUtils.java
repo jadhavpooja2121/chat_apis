@@ -9,8 +9,8 @@ public class RedisServiceUtils {
     return RedisUtils.getKey(RedisConstants.CONTEST_GROUP_CHAT_KEY, contestId);
   }
 
-  public static String userLastReadTimestampKey(Long contestId) {
-    return RedisUtils.getKey(RedisConstants.USER_LAST_READ_HASH_KEY, contestId);
+  public static String userLastReadTimestampKey(Long contestId, String username) {
+    return RedisUtils.getKey(RedisConstants.USER_LAST_READ_TIMESTAMP_KEY, contestId, username);
   }
 
 }

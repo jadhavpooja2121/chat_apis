@@ -11,5 +11,5 @@ import lombok.Setter;
 @AllArgsConstructor
 @NoArgsConstructor
 public class GetMessageResponseDO {
-  private List<SendMessageDO> messages;
+  private List<SendMessageResponseDO> messages;
 }
