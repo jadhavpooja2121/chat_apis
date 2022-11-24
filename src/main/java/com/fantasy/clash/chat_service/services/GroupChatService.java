@@ -44,10 +44,18 @@ public class GroupChatService {
   public void sendMessage(Long contestId, SendMessageDO sendMessageDO,
       CompletableFuture<ResponseEntity<?>> cf) {
     try {
-      redis.zadd(RedisConstants.REDIS_ALIAS, RedisServiceUtils.contestGroupChatKey(contestId),
-          TimeConversionUtils.getGMTTime(), JacksonUtils.toJson(sendMessageDO));
-      redis.expire(RedisConstants.REDIS_ALIAS, RedisServiceUtils.contestGroupChatKey(contestId),
-          RedisConstants.REDIS_24HRS_KEY_TTL);
+      Set<String> members = redis.zrange(RedisConstants.REDIS_ALIAS,
+          RedisServiceUtils.contestGroupChatKey(contestId), 0D, Long.MAX_VALUE);
+      logger.info("members {}", members);
+      if (CollectionUtils.isEmpty(members)) {
+        redis.zadd(RedisConstants.REDIS_ALIAS, RedisServiceUtils.contestGroupChatKey(contestId),
+            TimeConversionUtils.getGMTTime(), JacksonUtils.toJson(sendMessageDO));
+        redis.expire(RedisConstants.REDIS_ALIAS, RedisServiceUtils.contestGroupChatKey(contestId),
+            RedisConstants.REDIS_24HRS_KEY_TTL);
+      } else {
+        redis.zadd(RedisConstants.REDIS_ALIAS, RedisServiceUtils.contestGroupChatKey(contestId),
+            TimeConversionUtils.getGMTTime(), JacksonUtils.toJson(sendMessageDO));
+      }
       cf.complete(ResponseEntity.ok(new OkResponseDO<>(sendMessageDO)));
     } catch (Exception e) {
       logger.error(StringUtils.printStackTrace(e));
@@ -109,10 +117,17 @@ public class GroupChatService {
 
         logger.info("messageList {}", JacksonUtils.toJson(messageList));
 
-        redis.hmset(RedisConstants.REDIS_ALIAS,
-            RedisServiceUtils.userLastReadTimestampKey(contestId, username), username,
-            lastreadtime.toString());
-
+        try {
+         redis.hmget(RedisConstants.REDIS_ALIAS,
+              RedisServiceUtils.userLastReadTimestampKey(contestId, username), username);
+        } catch (Exception e) {
+          redis.hmset(RedisConstants.REDIS_ALIAS,
+              RedisServiceUtils.userLastReadTimestampKey(contestId, username), username,
+              lastreadtime.toString());
+          redis.expire(RedisConstants.REDIS_ALIAS,
+              RedisServiceUtils.userLastReadTimestampKey(contestId, username),
+              RedisConstants.REDIS_24HRS_KEY_TTL);
+        }
         cf.complete(ResponseEntity.ok(new OkResponseDO<>(new GetMessageResponseDO(messageList))));
         return;
       } else {
@@ -164,13 +179,7 @@ public class GroupChatService {
             messageList.add(new SendMessageResponseDO(sendMessageDO.getUsername(),
                 sendMessageDO.getMessage(), valMap.getKey().longValue(), false));
           }
-
           logger.info("messageList {}", JacksonUtils.toJson(messageList));
-
-          redis.hmset(RedisConstants.REDIS_ALIAS,
-              RedisServiceUtils.userLastReadTimestampKey(contestId, username), username,
-              lastreadtime.toString());
-
           cf.complete(ResponseEntity.ok(new OkResponseDO<>(new GetMessageResponseDO(messageList))));
           return;
         } else if (isNext == false && timestamp <= lastRead) {
@@ -178,12 +187,12 @@ public class GroupChatService {
           logger.info("queried timestamp {}", timestamp);
           max = Long.MIN_VALUE;
           logger.info("prev read timestamp {}", max);
-          Set<TypedTuple<String>> preMessagesWithScores =
+          Set<TypedTuple<String>> prevMessagesWithScores =
               redis.zrevrangeByScoreWithScores(RedisConstants.REDIS_ALIAS,
                   RedisServiceUtils.contestGroupChatKey(contestId), max, min, 1, 3);
-          logger.info("membersWithScores {}", preMessagesWithScores);
+          logger.info("membersWithScores {}", prevMessagesWithScores);
 
-          if (CollectionUtils.isEmpty(preMessagesWithScores)) {
+          if (CollectionUtils.isEmpty(prevMessagesWithScores)) {
             ErrorResponseDO noMessagesResponseDO = new ErrorResponseDO(
                 ResponseErrorCodes.NO_LAST_MESSAGES, ResponseErrorMessages.NO_LAST_MESSAGES);
             cf.complete(ResponseEntity.ok(noMessagesResponseDO));
@@ -191,25 +200,10 @@ public class GroupChatService {
           }
 
           Map<Double, String> usernameMsgTimestampMap = new TreeMap<Double, String>();
-          for (TypedTuple<String> val : preMessagesWithScores) {
+          for (TypedTuple<String> val : prevMessagesWithScores) {
             usernameMsgTimestampMap.put(val.getScore(), val.getValue());
           }
           logger.info("map <time, val> :{}", usernameMsgTimestampMap);
-
-          List<Double> userMsgsTimestampList = new ArrayList<>();
-          for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
-            Double latestTimestamp = valMap.getKey();
-            logger.info("latestTimestamp:{}", latestTimestamp);
-            userMsgsTimestampList.add(latestTimestamp);
-          }
-          logger.info("userMsgsTimestampList:{}", userMsgsTimestampList);
-
-          Long lastreadtime = Collections.max(userMsgsTimestampList).longValue();
-          logger.info("lastRead:{}", lastreadtime);
-
-          redis.hmset(RedisConstants.REDIS_ALIAS,
-              RedisServiceUtils.userLastReadTimestampKey(contestId, username), username,
-              lastreadtime.toString());
 
           List<SendMessageResponseDO> messageList = new ArrayList<>();
           for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
@@ -257,7 +251,7 @@ public class GroupChatService {
       }
 
       MessageNotificationDO messageNotificationDO = new MessageNotificationDO();
-      messageNotificationDO.setMessageCnt(messageCnt-1);
+      messageNotificationDO.setMessageCnt(messageCnt - 1);
       cf.complete(ResponseEntity.ok(new OkResponseDO<>(messageNotificationDO)));
     } catch (Exception e) {
       logger.error("Exception due to {}", StringUtils.printStackTrace(e));
