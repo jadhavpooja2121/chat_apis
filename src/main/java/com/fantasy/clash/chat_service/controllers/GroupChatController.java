@@ -1,14 +1,11 @@
 package com.fantasy.clash.chat_service.controllers;
 
 
-import java.sql.Date;
-import java.sql.Timestamp;
 import java.util.concurrent.CompletableFuture;
 import javax.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,7 +18,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.async.DeferredResult;
 import com.fantasy.clash.chat_service.dos.SendMessageDO;
 import com.fantasy.clash.chat_service.services.GroupChatService;
-import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
 import com.fantasy.clash.chat_service.validators.RequestValidator;
 import com.fantasy.clash.framework.http.constants.ErrorConstants;
 import com.fantasy.clash.framework.http.constants.ErrorMessages;
@@ -106,7 +102,6 @@ public class GroupChatController extends BaseController {
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-
       ErrorResponseDO timestampValidationDO = RequestValidator.validateTimestamp(timestamp);
       if (timestampValidationDO != null) {
         cf.complete(ResponseEntity.ok(timestampValidationDO));
@@ -146,7 +141,12 @@ public class GroupChatController extends BaseController {
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-      // validate username
+      ErrorResponseDO usernameValidationDO = RequestValidator.validateUsername(username);
+      if (usernameValidationDO != null) {
+        cf.complete(ResponseEntity.ok(usernameValidationDO));
+        this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
+        return df;
+      }
       groupChatService.notify(contestId, username, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
