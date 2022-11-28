@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import com.fantasy.clash.chat_service.constants.ResponseErrorCodes;
 import com.fantasy.clash.chat_service.constants.ResponseErrorMessages;
 import com.fantasy.clash.chat_service.dos.SendMessageDO;
+import com.fantasy.clash.chat_service.dos.SendUserToUserMessageDO;
 import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
 import com.fantasy.clash.framework.utils.CollectionUtils;
 import com.fantasy.clash.framework.utils.StringUtils;
@@ -40,6 +41,15 @@ public class RequestValidator {
     if (timestamp == null) {
       return new ErrorResponseDO(ResponseErrorCodes.INVALID_TIMESTAMP,
           ResponseErrorMessages.INVALID_TIMESTAMP);
+    }
+    return null;
+  }
+
+  public static ErrorResponseDO validateSendUserToUserMessageRequest(
+      SendUserToUserMessageDO sendUserToUserMessageDO) {
+    if (sendUserToUserMessageDO == null) {
+      return new ErrorResponseDO(ResponseErrorCodes.SEND_MESSSAGE_REQUEST_INVALID,
+          ResponseErrorMessages.SEND_MESSSAGE_REQUEST_INVALID);
     }
     return null;
   }

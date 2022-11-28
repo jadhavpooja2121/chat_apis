@@ -17,6 +17,7 @@
 	<properties>
 		<java.version>11</java.version>
 		<fantasy.clash.framework.version>0.0.1-SNAPSHOT</fantasy.clash.framework.version>
+		    <datastax.version>4.11.1</datastax.version> 
 	</properties>
 	<dependencies>
 		<dependency>
@@ -96,6 +97,36 @@
 			<artifactId>spring-boot-starter-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+      <groupId>fantasy_clash_frameworks</groupId>
+      <artifactId>fantasy_clash_framework_cassandra</artifactId>
+      <version>${fantasy.clash.framework.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>com.datastax.oss</groupId>
+        <artifactId>java-driver-core</artifactId>
+        <version>${datastax.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>com.datastax.oss</groupId>
+        <artifactId>java-driver-query-builder</artifactId>
+        <version>${datastax.version}</version>
+    </dependency>
+    <dependency>
+       <groupId>com.datastax.oss</groupId>
+       <artifactId>java-driver-mapper-runtime</artifactId>
+       <version>${datastax.version}</version>
+    </dependency>
+    <dependency>
+        <groupId>com.codahale.metrics</groupId>
+        <artifactId>metrics-core</artifactId>
+        <version>3.0.2</version>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.data</groupId>
+      <artifactId>spring-data-cassandra</artifactId>
+      <version>1.5.1.RELEASE</version>
+    </dependency>
 	</dependencies>
 
 	<build>
