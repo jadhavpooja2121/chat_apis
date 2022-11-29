@@ -111,7 +111,7 @@ public class GroupChatController extends BaseController {
       groupChatService.getMessage(contestId, username, timestamp, isNext, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
-      logger.error("Send message request failed due to {}", StringUtils.printStackTrace(e));
+      logger.error("Get message request failed due to {}", StringUtils.printStackTrace(e));
       ErrorResponse errorResponse = new ErrorResponse();
       if (e instanceof InvalidLoginContextHeaderException) {
         errorResponse.setCode(ErrorConstants.LOGIN_CONTEXT_HEADER_ERROR_CODE);
@@ -133,7 +133,7 @@ public class GroupChatController extends BaseController {
     DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
     try {
       LoginContext loginContext = getLoginContext(request);
-      logger.debug("Received read messge request from {} ", loginContext.getUserId());
+      logger.debug("Received get message notification messge request from {} ", loginContext.getUserId());
       CompletableFuture<ResponseEntity<?>> cf = new CompletableFuture<ResponseEntity<?>>();
       ErrorResponseDO contestIdValidationDO = RequestValidator.validateContestId(contestId);
       if (contestIdValidationDO != null) {
@@ -150,7 +150,7 @@ public class GroupChatController extends BaseController {
       groupChatService.notify(contestId, username, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
-      logger.error("Send message request failed due to {}", StringUtils.printStackTrace(e));
+      logger.error("message notify request failed due to {}", StringUtils.printStackTrace(e));
       ErrorResponse errorResponse = new ErrorResponse();
       if (e instanceof InvalidLoginContextHeaderException) {
         errorResponse.setCode(ErrorConstants.LOGIN_CONTEXT_HEADER_ERROR_CODE);

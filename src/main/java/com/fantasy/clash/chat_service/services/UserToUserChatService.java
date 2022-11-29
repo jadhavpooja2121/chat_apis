@@ -1,5 +1,8 @@
 package com.fantasy.clash.chat_service.services;
 
+import java.sql.Timestamp;
+import java.util.List;
+import java.util.NavigableMap;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import com.fantasy.clash.chat_service.dos.SendUserToUserMessageDO;
 import com.fantasy.clash.chat_service.dos.SendUserToUserMessageResponseDO;
 import com.fantasy.clash.chat_service.helper_services.UserToUserChatHelperService;
@@ -32,6 +36,23 @@ public class UserToUserChatService {
               sendUserToUserMessageDO.getMessage(), TimeConversionUtils.getGMTTime());
       if (sendUserToUserMessageResponseDO != null) {
         cf.complete(ResponseEntity.ok(new OkResponseDO<>(sendUserToUserMessageResponseDO)));
+        return;
+      }
+    } catch (Exception e) {
+      logger.error(StringUtils.printStackTrace(e));
+    }
+  }
+
+  public void getMessage(String username, String otherUserName,
+      CompletableFuture<ResponseEntity<?>> cf) {
+    logger.info("request from {} to get messages by {}", username, otherUserName);
+    try {
+      String hash = HashUtils.getHash(username, otherUserName);
+      logger.info("get hash {}", hash);
+      NavigableMap<String, Timestamp> messagesList =
+          userToUserChatHelperService.getUserMessages(hash, username, otherUserName);
+      if (!CollectionUtils.isEmpty(messagesList)) {
+        cf.complete(ResponseEntity.ok(new OkResponseDO<>(messagesList)));
         return;
       }
     } catch (Exception e) {

@@ -7,6 +7,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -62,6 +64,46 @@ public class UserToUserChatController extends BaseController {
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
       logger.error("Send message request failed due to {}", StringUtils.printStackTrace(e));
+      ErrorResponse errorResponse = new ErrorResponse();
+      if (e instanceof InvalidLoginContextHeaderException) {
+        errorResponse.setCode(ErrorConstants.LOGIN_CONTEXT_HEADER_ERROR_CODE);
+        errorResponse.setMessage(ErrorMessages.UNKNOWN_ERROR_MESSAGE);
+      } else {
+        errorResponse.setCode(ErrorConstants.UNKNOWN_ERROR_CODE);
+        errorResponse.setMessage(ErrorMessages.UNKNOWN_ERROR_MESSAGE);
+      }
+      df.setResult(ResponseEntity.ok(errorResponse));
+    }
+    return df;
+  }
+
+  @GetMapping(value = "/get", produces = MediaType.APPLICATION_JSON_VALUE)
+  public DeferredResult<ResponseEntity<?>> getMessage(
+      @RequestParam(required = true) String username,
+      @RequestParam(required = true) String otherUserName, HttpServletRequest request) {
+    Long startTime = System.currentTimeMillis();
+    String apiEndPoint = "/chat_service/get";
+    DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
+    try {
+      LoginContext loginContext = getLoginContext(request);
+      logger.debug("Received send messge request from {} ", loginContext.getUserId());
+      CompletableFuture<ResponseEntity<?>> cf = new CompletableFuture<ResponseEntity<?>>();
+      ErrorResponseDO usernameValidationDO = RequestValidator.validateUsername(username);
+      if (usernameValidationDO != null) {
+        cf.complete(ResponseEntity.ok(usernameValidationDO));
+        this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
+        return df;
+      }
+      ErrorResponseDO OtherUserNameValidationDO = RequestValidator.validateUsername(otherUserName);
+      if (OtherUserNameValidationDO != null) {
+        cf.complete(ResponseEntity.ok(OtherUserNameValidationDO));
+        this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
+        return df;
+      }
+      userToUserChatService.getMessage(username, otherUserName, cf);   
+      this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
+    } catch (Exception e) {
+      logger.error("Get message request failed due to {}", StringUtils.printStackTrace(e));
       ErrorResponse errorResponse = new ErrorResponse();
       if (e instanceof InvalidLoginContextHeaderException) {
         errorResponse.setCode(ErrorConstants.LOGIN_CONTEXT_HEADER_ERROR_CODE);
