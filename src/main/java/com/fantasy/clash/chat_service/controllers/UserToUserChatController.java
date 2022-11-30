@@ -80,7 +80,7 @@ public class UserToUserChatController extends BaseController {
   @GetMapping(value = "/get", produces = MediaType.APPLICATION_JSON_VALUE)
   public DeferredResult<ResponseEntity<?>> getMessage(
       @RequestParam(required = true) String username,
-      @RequestParam(required = true) String otherUserName, HttpServletRequest request) {
+      @RequestParam(required = true) String username2, HttpServletRequest request) {
     Long startTime = System.currentTimeMillis();
     String apiEndPoint = "/chat_service/get";
     DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
@@ -94,13 +94,13 @@ public class UserToUserChatController extends BaseController {
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-      ErrorResponseDO OtherUserNameValidationDO = RequestValidator.validateUsername(otherUserName);
+      ErrorResponseDO OtherUserNameValidationDO = RequestValidator.validateUsername(username2);
       if (OtherUserNameValidationDO != null) {
         cf.complete(ResponseEntity.ok(OtherUserNameValidationDO));
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-      userToUserChatService.getMessage(username, otherUserName, cf);   
+      userToUserChatService.getMessage(username, username2, cf);   
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
       logger.error("Get message request failed due to {}", StringUtils.printStackTrace(e));

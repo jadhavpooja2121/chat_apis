@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import com.fantasy.clash.chat_service.dos.GetUserToUserMessagesResponseDO;
 import com.fantasy.clash.chat_service.dos.SendUserToUserMessageDO;
 import com.fantasy.clash.chat_service.dos.SendUserToUserMessageResponseDO;
 import com.fantasy.clash.chat_service.helper_services.UserToUserChatHelperService;
@@ -30,9 +31,9 @@ public class UserToUserChatService {
   public void sendMessage(String username, SendUserToUserMessageDO sendUserToUserMessageDO,
       CompletableFuture<ResponseEntity<?>> cf) {
     try {
-      String hash = HashUtils.getHash(username, sendUserToUserMessageDO.getOtherUsername());
+      String groupChatId = HashUtils.getHash(username, sendUserToUserMessageDO.getUsername2());
       SendUserToUserMessageResponseDO sendUserToUserMessageResponseDO = userToUserChatHelperService
-          .saveMessage(hash, username, sendUserToUserMessageDO.getOtherUsername(),
+          .saveMessage(groupChatId, username, sendUserToUserMessageDO.getUsername2(),
               sendUserToUserMessageDO.getMessage(), TimeConversionUtils.getGMTTime());
       if (sendUserToUserMessageResponseDO != null) {
         cf.complete(ResponseEntity.ok(new OkResponseDO<>(sendUserToUserMessageResponseDO)));
@@ -49,9 +50,9 @@ public class UserToUserChatService {
     try {
       String hash = HashUtils.getHash(username, otherUserName);
       logger.info("get hash {}", hash);
-      NavigableMap<String, Timestamp> messagesList =
+      GetUserToUserMessagesResponseDO messagesList =
           userToUserChatHelperService.getUserMessages(hash, username, otherUserName);
-      if (!CollectionUtils.isEmpty(messagesList)) {
+      if (messagesList != null) {
         cf.complete(ResponseEntity.ok(new OkResponseDO<>(messagesList)));
         return;
       }

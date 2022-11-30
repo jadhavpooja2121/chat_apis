@@ -12,5 +12,5 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class GetUserToUserMessagesResponseDO {
-  private NavigableMap<String, Timestamp> messagesList;
+  private NavigableMap<Long, String> messagesList;
 }
