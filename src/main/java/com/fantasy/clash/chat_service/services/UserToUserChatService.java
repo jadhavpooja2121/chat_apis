@@ -44,14 +44,14 @@ public class UserToUserChatService {
     }
   }
 
-  public void getMessage(String username, String otherUserName,
+  public void getMessage(String username, String username2,
       CompletableFuture<ResponseEntity<?>> cf) {
-    logger.info("request from {} to get messages by {}", username, otherUserName);
+    logger.info("request from {} to get messages by {}", username, username2);
     try {
-      String hash = HashUtils.getHash(username, otherUserName);
-      logger.info("get hash {}", hash);
+      String groupChatId = HashUtils.getHash(username, username2);
+      logger.info("get hash {}", groupChatId);
       GetUserToUserMessagesResponseDO messagesList =
-          userToUserChatHelperService.getUserMessages(hash, username, otherUserName);
+          userToUserChatHelperService.getUserMessages(groupChatId, username, username2);
       if (messagesList != null) {
         cf.complete(ResponseEntity.ok(new OkResponseDO<>(messagesList)));
         return;

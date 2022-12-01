@@ -12,5 +12,6 @@ import lombok.Setter;
 public class SendUserToUserMessageResponseDO {
   private String sender;
   private String receiver;
+  private String message;
   private Long sendAt;
 }
