@@ -35,6 +35,9 @@ public class UserToUserChatController extends BaseController {
   @Autowired
   private UserToUserChatService userToUserChatService;
 
+  @Autowired
+  private RequestValidator requestValidator;
+  
   @PostMapping(value = "/send", produces = MediaType.APPLICATION_JSON_VALUE,
       consumes = MediaType.APPLICATION_JSON_VALUE)
   public DeferredResult<ResponseEntity<?>> sendMessage(
@@ -60,6 +63,13 @@ public class UserToUserChatController extends BaseController {
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
+      ErrorResponseDO messageLengthValidationDO =
+          requestValidator.validateMessageLength(sendUserToUserMessageDO.getMessage());
+        if (messageLengthValidationDO != null) {
+          cf.complete(ResponseEntity.ok(messageLengthValidationDO));
+          this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
+          return df;
+        }
       userToUserChatService.sendMessage(username, sendUserToUserMessageDO, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {

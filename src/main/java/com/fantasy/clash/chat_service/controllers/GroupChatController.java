@@ -35,6 +35,9 @@ public class GroupChatController extends BaseController {
 
   @Autowired
   private GroupChatService groupChatService;
+  
+  @Autowired
+  private RequestValidator requestValidator;
 
   @PostMapping(value = "/send", produces = MediaType.APPLICATION_JSON_VALUE,
       consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -57,6 +60,13 @@ public class GroupChatController extends BaseController {
           RequestValidator.validateSendMessageRequest(sendMessageDO);
       if (sendMessageReqValidationDO != null) {
         cf.complete(ResponseEntity.ok(sendMessageReqValidationDO));
+        this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
+        return df;
+      }
+      ErrorResponseDO messageLengthValidationDO =
+        requestValidator.validateMessageLength(sendMessageDO.getMessage());
+      if (messageLengthValidationDO != null) {
+        cf.complete(ResponseEntity.ok(messageLengthValidationDO));
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
@@ -133,7 +143,8 @@ public class GroupChatController extends BaseController {
     DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
     try {
       LoginContext loginContext = getLoginContext(request);
-      logger.debug("Received get message notification messge request from {} ", loginContext.getUserId());
+      logger.debug("Received get message notification messge request from {} ",
+          loginContext.getUserId());
       CompletableFuture<ResponseEntity<?>> cf = new CompletableFuture<ResponseEntity<?>>();
       ErrorResponseDO contestIdValidationDO = RequestValidator.validateContestId(contestId);
       if (contestIdValidationDO != null) {

@@ -7,6 +7,8 @@
 	"async.threadpool.queuecapacity": "5000",
 	"async.threadpool.await.termination.seconds": "60",
 	"cassandra.fantasy_clash.keyspacename": "chat_service",
-  "cassandra.fantasy_clash.contactpoints": "127.0.0.1",
-  "cassandra.fantasy_clash.port": "9042"
+	"cassandra.fantasy_clash.contactpoints": "127.0.0.1",
+	"cassandra.fantasy_clash.port": "9042",
+	"message.min.length": "1",
+	"message.max.length": "100"
 }

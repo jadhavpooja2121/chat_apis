@@ -11,5 +11,6 @@ public class ResponseErrorCodes {
   public static final Integer NO_NEW_MESSAGES = 1113;
   public static final Integer NO_LAST_MESSAGES = 1114;
   public static final Integer INVALID_USERNAME = 1115;
-  public static final Integer INVALID_TIMESTAMP = 1117;
+  public static final Integer INVALID_MESSAGE_LENGTH = 1117;
+  public static final Integer INVALID_TIMESTAMP = 1119;
 }

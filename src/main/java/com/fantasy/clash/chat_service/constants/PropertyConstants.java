@@ -14,4 +14,6 @@ public class PropertyConstants {
   public static final String ASYNC_THREAD_POOL_QUEUE_CAPACITY = "async.threadpool.queuecapacity";
   public static final String ASYNC_THREAD_POOL_AWAIT_TERMINATION_SECONDS =
       "async.threadpool.await.termination.seconds";
+  public static final String MESSAGE_MIN_LENGTH = "message.min.length";
+  public static final String MESSAGE_MAX_LENGTH = "message.max.length";
 }
