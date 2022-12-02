@@ -1,6 +1,7 @@
 package com.fantasy.clash.chat_service.helper_services;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -176,7 +177,11 @@ public class UserToUserChatHelperService {
         GetUserToUserMessagesResponseDO nextMessages =
             getNextMessages(groupChatId, username, username2, fromTimestamp);
         return nextMessages;
-
+      } else {
+        Long fromTimestamp = timestamp;
+        GetUserToUserMessagesResponseDO prevMessages =
+            getPrevMessages(groupChatId, username, username2, fromTimestamp);
+        return prevMessages;
       }
     } catch (Exception e) {
       logger.error(StringUtils.printStackTrace(e));
@@ -256,5 +261,73 @@ public class UserToUserChatHelperService {
       logger.info(StringUtils.printStackTrace(e));
     }
     return null;
+  }
+
+  public GetUserToUserMessagesResponseDO getPrevMessages(String groupChatId, String username,
+      String username2, Long fromTimestamp) {
+    logger.info("Inside get prev");
+    try {
+      Statement getMessages = QueryBuilder
+          .select(DatabaseConstants.MESSAGE_SENDER_COLUMN, DatabaseConstants.MESSAGE_TEXT_COLUMN,
+              DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN)
+          .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.USER_CHATS_TABLE)
+          .where(QueryBuilder.eq(DatabaseConstants.CHAT_IDENTIFIER_COLUMN, groupChatId))
+          .and(QueryBuilder.lt(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN, fromTimestamp))
+          .and(QueryBuilder.in("sender", List.of(username, username2)));
+      ResultSet result = chatSession.execute(getMessages);
+
+      Statement getUserLastReadTime =
+          QueryBuilder.select(DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN)
+              .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
+              .where(QueryBuilder.eq(DatabaseConstants.USERNAME1_COLUMN, username));
+      ResultSet getUserLastReadTimeResult = chatSession.execute(getUserLastReadTime);
+      Long userLastReadtime = null;
+      for (Row lastRead : getUserLastReadTimeResult.all()) {
+        userLastReadtime = lastRead.getLong(0);
+        logger.info("user1LastReadtime:{}", userLastReadtime);
+      }
+
+      List<GetUserToUserMessageResponseDO> allMessages =
+          new ArrayList<GetUserToUserMessageResponseDO>();
+      Boolean isRead = null;
+      for (Row msg : result.all()) {
+        isRead = msg.getLong(2) <= userLastReadtime ? true : false;
+        GetUserToUserMessageResponseDO message = new GetUserToUserMessageResponseDO(
+            msg.getString(0), msg.getString(1), msg.getLong(2), isRead);
+        allMessages.add(message);
+      }
+
+      logger.info("raw message list {}", JacksonUtils.toJson(allMessages));
+
+      if (CollectionUtils.isEmpty(allMessages)) {
+        return null;
+      }
+
+      List<GetUserToUserMessageResponseDO> sortedMessages =
+          allMessages.stream().sorted((t1, t2) -> t1.getSentAt().compareTo(t2.getSentAt()))
+              .collect(Collectors.toList());
+      logger.info("sorted message list {}", JacksonUtils.toJson(sortedMessages));
+
+      // Get 100 messages only
+      // TODO: change limit to 100
+
+      List<GetUserToUserMessageResponseDO> pageN =
+          sortedMessages.stream().limit(5).collect(Collectors.toList());
+      List<GetUserToUserMessageResponseDO> reverseList = new ArrayList<>();
+      for (int i = pageN.size() - 1; i >= 0; i--) {
+        GetUserToUserMessageResponseDO msgDO = pageN.get(i);
+        reverseList.add(msgDO);
+      }
+      logger.info("reverse {}", JacksonUtils.toJson(reverseList));
+
+      GetUserToUserMessagesResponseDO userMessagesDO =
+          new GetUserToUserMessagesResponseDO(reverseList);
+
+      return userMessagesDO;
+    } catch (Exception e) {
+      logger.info(StringUtils.printStackTrace(e));
+    }
+    return null;
+
   }
 }
