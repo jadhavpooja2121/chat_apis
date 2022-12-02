@@ -105,33 +105,114 @@ public class UserToUserChatHelperService {
   }
 
   public GetUserToUserMessagesResponseDO getUserMessages(String groupChatId, String username,
-      String username2) {
+      String username2, Long timestamp, boolean isNext) {
     try {
-      Statement readMessages = QueryBuilder
+      if (timestamp == 0) {
+        Statement readMessages = QueryBuilder
+            .select(DatabaseConstants.MESSAGE_SENDER_COLUMN, DatabaseConstants.MESSAGE_TEXT_COLUMN,
+                DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN)
+            .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.USER_CHATS_TABLE)
+            .where(QueryBuilder.eq(DatabaseConstants.CHAT_IDENTIFIER_COLUMN, groupChatId))
+            .and(QueryBuilder.in("sender", List.of(username, username2)));
+
+        ResultSet result = chatSession.execute(readMessages);
+
+        Statement getUserLastReadTime =
+            QueryBuilder.select(DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN)
+                .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
+                .where(QueryBuilder.eq(DatabaseConstants.USERNAME1_COLUMN, username));
+        ResultSet getUserLastReadTimeResult = chatSession.execute(getUserLastReadTime);
+        Long user1LastReadtime = null;
+        for (Row lastRead : getUserLastReadTimeResult.all()) {
+          user1LastReadtime = lastRead.getLong(0);
+          logger.info("user1LastReadtime:{}", user1LastReadtime);
+        }
+
+        List<GetUserToUserMessageResponseDO> allMessages =
+            new ArrayList<GetUserToUserMessageResponseDO>();
+        Boolean isRead = null;
+        for (Row msg : result.all()) {
+          isRead = msg.getLong(2) <= user1LastReadtime ? true : false;
+          GetUserToUserMessageResponseDO message = new GetUserToUserMessageResponseDO(
+              msg.getString(0), msg.getString(1), msg.getLong(2), isRead);
+          allMessages.add(message);
+        }
+
+        logger.info("raw message list {}", JacksonUtils.toJson(allMessages));
+
+        if (CollectionUtils.isEmpty(allMessages)) {
+          return null;
+        }
+
+        List<GetUserToUserMessageResponseDO> sortedMessages =
+            allMessages.stream().sorted((t1, t2) -> t1.getSentAt().compareTo(t2.getSentAt()))
+                .collect(Collectors.toList());
+        logger.info("sorted message list {}", JacksonUtils.toJson(sortedMessages));
+
+        // Get 100 messages only
+        // TODO: change limit to 100
+
+        List<GetUserToUserMessageResponseDO> page1 =
+            sortedMessages.stream().limit(5).collect(Collectors.toList());
+
+        GetUserToUserMessagesResponseDO userMessagesDO = new GetUserToUserMessagesResponseDO(page1);
+
+        Long lastRead = page1.get(page1.size() - 1).getSentAt();
+        logger.info("last read in the list:{}", lastRead);
+
+        Statement updateActiveChat = QueryBuilder
+            .insertInto(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
+            .values(
+                List.of(DatabaseConstants.USERNAME1_COLUMN, DatabaseConstants.USERNAME2_COLUMN,
+                    DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN),
+                List.of(username, username2, lastRead))
+            .using(QueryBuilder.ttl(CassandraConstants.DEFAULT_CHAT_DATA_EXPIRY_TTL))
+            .setConsistencyLevel(ConsistencyLevel.LOCAL_ONE);
+        chatSession.execute(updateActiveChat);
+
+        return userMessagesDO;
+      } else if (timestamp != 0 && isNext == true) {
+        Long fromTimestamp = timestamp;
+        GetUserToUserMessagesResponseDO nextMessages =
+            getNextMessages(groupChatId, username, username2, fromTimestamp);
+        return nextMessages;
+
+      }
+    } catch (Exception e) {
+      logger.error(StringUtils.printStackTrace(e));
+    }
+    return null;
+  }
+
+  public GetUserToUserMessagesResponseDO getNextMessages(String groupChatId, String username,
+      String username2, Long fromTimestamp) {
+    logger.info("Inside get next");
+    try {
+      Statement getMessages = QueryBuilder
           .select(DatabaseConstants.MESSAGE_SENDER_COLUMN, DatabaseConstants.MESSAGE_TEXT_COLUMN,
               DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN)
           .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.USER_CHATS_TABLE)
           .where(QueryBuilder.eq(DatabaseConstants.CHAT_IDENTIFIER_COLUMN, groupChatId))
+          .and(QueryBuilder.gt(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN, fromTimestamp))
           .and(QueryBuilder.in("sender", List.of(username, username2)));
-
-      ResultSet result = chatSession.execute(readMessages);
+      ResultSet result = chatSession.execute(getMessages);
 
       Statement getUserLastReadTime =
           QueryBuilder.select(DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN)
               .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
               .where(QueryBuilder.eq(DatabaseConstants.USERNAME1_COLUMN, username));
       ResultSet getUserLastReadTimeResult = chatSession.execute(getUserLastReadTime);
-      Long user1LastReadtime = null;
+      Long userLastReadtime = null;
       for (Row lastRead : getUserLastReadTimeResult.all()) {
-        user1LastReadtime = lastRead.getLong(0);
-        logger.info("user1LastReadtime:{}", user1LastReadtime);
+        userLastReadtime = lastRead.getLong(0);
+        logger.info("user1LastReadtime:{}", userLastReadtime);
       }
 
       List<GetUserToUserMessageResponseDO> allMessages =
           new ArrayList<GetUserToUserMessageResponseDO>();
       Boolean isRead = null;
       for (Row msg : result.all()) {
-        isRead = msg.getLong(2) <= user1LastReadtime ? true : false;
+        isRead = msg.getLong(2) <= userLastReadtime ? true : false;
         GetUserToUserMessageResponseDO message = new GetUserToUserMessageResponseDO(
             msg.getString(0), msg.getString(1), msg.getLong(2), isRead);
         allMessages.add(message);
@@ -151,27 +232,28 @@ public class UserToUserChatHelperService {
       // Get 100 messages only
       // TODO: change limit to 100
 
-      List<GetUserToUserMessageResponseDO> page1 =
+      List<GetUserToUserMessageResponseDO> pageN =
           sortedMessages.stream().limit(5).collect(Collectors.toList());
+      logger.info("page1 {}", JacksonUtils.toJson(pageN));
 
-      GetUserToUserMessagesResponseDO userMessagesDO = new GetUserToUserMessagesResponseDO(page1);
+      GetUserToUserMessagesResponseDO userMessagesDO = new GetUserToUserMessagesResponseDO(pageN);
 
-      Long lastRead = page1.get(4).getSentAt();
-      logger.info("last read in the list:{}", lastRead);
+      Long lastReadTime = pageN.get(pageN.size() - 1).getSentAt();
+      logger.info("last read in the list:{}", lastReadTime);
 
       Statement updateActiveChat = QueryBuilder
           .insertInto(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
           .values(
               List.of(DatabaseConstants.USERNAME1_COLUMN, DatabaseConstants.USERNAME2_COLUMN,
                   DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN),
-              List.of(username, username2, lastRead))
+              List.of(username, username2, lastReadTime))
           .using(QueryBuilder.ttl(CassandraConstants.DEFAULT_CHAT_DATA_EXPIRY_TTL))
           .setConsistencyLevel(ConsistencyLevel.LOCAL_ONE);
       chatSession.execute(updateActiveChat);
 
       return userMessagesDO;
     } catch (Exception e) {
-      logger.error(StringUtils.printStackTrace(e));
+      logger.info(StringUtils.printStackTrace(e));
     }
     return null;
   }

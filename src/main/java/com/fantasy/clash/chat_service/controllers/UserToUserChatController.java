@@ -37,7 +37,7 @@ public class UserToUserChatController extends BaseController {
 
   @Autowired
   private RequestValidator requestValidator;
-  
+
   @PostMapping(value = "/send", produces = MediaType.APPLICATION_JSON_VALUE,
       consumes = MediaType.APPLICATION_JSON_VALUE)
   public DeferredResult<ResponseEntity<?>> sendMessage(
@@ -65,11 +65,11 @@ public class UserToUserChatController extends BaseController {
       }
       ErrorResponseDO messageLengthValidationDO =
           requestValidator.validateMessageLength(sendUserToUserMessageDO.getMessage());
-        if (messageLengthValidationDO != null) {
-          cf.complete(ResponseEntity.ok(messageLengthValidationDO));
-          this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
-          return df;
-        }
+      if (messageLengthValidationDO != null) {
+        cf.complete(ResponseEntity.ok(messageLengthValidationDO));
+        this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
+        return df;
+      }
       userToUserChatService.sendMessage(username, sendUserToUserMessageDO, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
@@ -90,7 +90,10 @@ public class UserToUserChatController extends BaseController {
   @GetMapping(value = "/get", produces = MediaType.APPLICATION_JSON_VALUE)
   public DeferredResult<ResponseEntity<?>> getMessage(
       @RequestParam(required = true) String username,
-      @RequestParam(required = true) String username2, HttpServletRequest request) {
+      @RequestParam(required = true) String username2,
+      @RequestParam(required = true, defaultValue = "0") Long timestamp,
+      @RequestParam(required = true, defaultValue = "true") boolean isNext,
+      HttpServletRequest request) {
     Long startTime = System.currentTimeMillis();
     String apiEndPoint = "/chat_service/user_to_user_chat/get";
     DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
@@ -110,7 +113,7 @@ public class UserToUserChatController extends BaseController {
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-      userToUserChatService.getMessage(username, username2, cf);   
+      userToUserChatService.getMessage(username, username2, timestamp, isNext, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
       logger.error("Get message request failed due to {}", StringUtils.printStackTrace(e));

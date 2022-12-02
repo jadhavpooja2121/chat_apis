@@ -47,13 +47,13 @@ public class UserToUserChatService {
   }
 
   public void getMessage(String username, String username2,
-      CompletableFuture<ResponseEntity<?>> cf) {
+      Long timestamp, boolean isNext, CompletableFuture<ResponseEntity<?>> cf) {
     logger.info("request from {} to get messages by {}", username, username2);
     try {
       String groupChatId = HashUtils.getHash(username, username2);
       logger.info("get hash {}", groupChatId);
       GetUserToUserMessagesResponseDO messagesList =
-          userToUserChatHelperService.getUserMessages(groupChatId, username, username2);
+          userToUserChatHelperService.getUserMessages(groupChatId, username, username2, timestamp, isNext);
       if (messagesList == null) {
         cf.complete(ResponseEntity.ok(new ErrorResponseDO(ResponseErrorCodes.NO_MESSAGES_IN_CHAT,
             ResponseErrorMessages.NO_MESSAGES_IN_CHAT)));
