@@ -5,13 +5,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.cassandra.mapping.Column;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 import com.datastax.driver.core.ConsistencyLevel;
 import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Row;
@@ -21,9 +24,13 @@ import com.datastax.driver.core.querybuilder.QueryBuilder;
 import com.datastax.driver.core.querybuilder.Select;
 import com.fantasy.clash.chat_service.constants.CassandraConstants;
 import com.fantasy.clash.chat_service.constants.DatabaseConstants;
+import com.fantasy.clash.chat_service.constants.ResponseErrorCodes;
+import com.fantasy.clash.chat_service.constants.ResponseErrorMessages;
 import com.fantasy.clash.chat_service.dos.GetUserToUserMessageResponseDO;
 import com.fantasy.clash.chat_service.dos.GetUserToUserMessagesResponseDO;
 import com.fantasy.clash.chat_service.dos.SendUserToUserMessageResponseDO;
+import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
+import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
 import com.fantasy.clash.framework.utils.JacksonUtils;
 import com.fantasy.clash.framework.utils.StringUtils;
 
@@ -39,7 +46,7 @@ public class UserToUserChatHelperService {
       String username2, String message, Long timestamp) {
     try {
 
-      Statement statement = QueryBuilder
+      Statement insertChat = QueryBuilder
           .insertInto(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.USER_CHATS_TABLE)
           .values(
               List.of(DatabaseConstants.CHAT_IDENTIFIER_COLUMN,
@@ -49,9 +56,9 @@ public class UserToUserChatHelperService {
               List.of(groupChatId, username, timestamp, message))
           .using(QueryBuilder.ttl(CassandraConstants.DEFAULT_CHAT_DATA_EXPIRY_TTL))
           .setConsistencyLevel(ConsistencyLevel.LOCAL_ONE);
-      chatSession.execute(statement);
+      chatSession.execute(insertChat);
 
-      Statement st = QueryBuilder
+      Statement insertUserLastReadTime = QueryBuilder
           .insertInto(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
           .values(
               List.of(DatabaseConstants.USERNAME1_COLUMN, DatabaseConstants.USERNAME2_COLUMN,
@@ -59,7 +66,34 @@ public class UserToUserChatHelperService {
               List.of(username, username2, timestamp))
           .using(QueryBuilder.ttl(CassandraConstants.DEFAULT_CHAT_DATA_EXPIRY_TTL))
           .setConsistencyLevel(ConsistencyLevel.LOCAL_ONE);
-      chatSession.execute(st);
+      chatSession.execute(insertUserLastReadTime);
+
+      // Add row for another user with timestamp less than 1st user's last read
+      Statement getUserLastReadTime =
+          QueryBuilder.select(DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN)
+              .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
+              .where(QueryBuilder.eq(DatabaseConstants.USERNAME1_COLUMN, username));
+
+      ResultSet result = chatSession.execute(getUserLastReadTime);
+      Long user1LastReadtime = null;
+      for (Row lastRead : result.all()) {
+        user1LastReadtime = lastRead.getLong(0);
+        logger.info("user1LastReadtime:{}", user1LastReadtime);
+      }
+
+      Long defaultUser2LastRead = user1LastReadtime - 100;
+      logger.info("user1 last read:{}", defaultUser2LastRead);
+
+      Statement insertUser2LastReadTime = QueryBuilder
+          .insertInto(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
+          .values(
+              List.of(DatabaseConstants.USERNAME1_COLUMN, DatabaseConstants.USERNAME2_COLUMN,
+                  DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN),
+              List.of(username2, username, defaultUser2LastRead))
+          .using(QueryBuilder.ttl(CassandraConstants.DEFAULT_CHAT_DATA_EXPIRY_TTL))
+          .setConsistencyLevel(ConsistencyLevel.LOCAL_ONE);
+      chatSession.execute(insertUser2LastReadTime);
+
 
       SendUserToUserMessageResponseDO sendUserToUserMessageResponseDO =
           new SendUserToUserMessageResponseDO(username, username2, message, timestamp);
@@ -73,35 +107,68 @@ public class UserToUserChatHelperService {
   public GetUserToUserMessagesResponseDO getUserMessages(String groupChatId, String username,
       String username2) {
     try {
-      Statement st = QueryBuilder
+      Statement readMessages = QueryBuilder
           .select(DatabaseConstants.MESSAGE_SENDER_COLUMN, DatabaseConstants.MESSAGE_TEXT_COLUMN,
               DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN)
           .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.USER_CHATS_TABLE)
           .where(QueryBuilder.eq(DatabaseConstants.CHAT_IDENTIFIER_COLUMN, groupChatId))
           .and(QueryBuilder.in("sender", List.of(username, username2)));
 
-      ResultSet result = chatSession.execute(st);
+      ResultSet result = chatSession.execute(readMessages);
+
+      Statement getUserLastReadTime =
+          QueryBuilder.select(DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN)
+              .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
+              .where(QueryBuilder.eq(DatabaseConstants.USERNAME1_COLUMN, username));
+      ResultSet getUserLastReadTimeResult = chatSession.execute(getUserLastReadTime);
+      Long user1LastReadtime = null;
+      for (Row lastRead : getUserLastReadTimeResult.all()) {
+        user1LastReadtime = lastRead.getLong(0);
+        logger.info("user1LastReadtime:{}", user1LastReadtime);
+      }
 
       List<GetUserToUserMessageResponseDO> allMessages =
           new ArrayList<GetUserToUserMessageResponseDO>();
+      Boolean isRead = null;
       for (Row msg : result.all()) {
-        logger.info("msg:{}", msg.getString(0));
-        GetUserToUserMessageResponseDO message =
-            new GetUserToUserMessageResponseDO(msg.getString(0), msg.getString(1), msg.getLong(2));
+        isRead = msg.getLong(2) <= user1LastReadtime ? true : false;
+        GetUserToUserMessageResponseDO message = new GetUserToUserMessageResponseDO(
+            msg.getString(0), msg.getString(1), msg.getLong(2), isRead);
         allMessages.add(message);
+      }
+
+      logger.info("raw message list {}", JacksonUtils.toJson(allMessages));
+
+      if (CollectionUtils.isEmpty(allMessages)) {
+        return null;
       }
 
       List<GetUserToUserMessageResponseDO> sortedMessages =
           allMessages.stream().sorted((t1, t2) -> t1.getSentAt().compareTo(t2.getSentAt()))
               .collect(Collectors.toList());
-      new ArrayList<GetUserToUserMessageResponseDO>();
+      logger.info("sorted message list {}", JacksonUtils.toJson(sortedMessages));
 
-      for (GetUserToUserMessageResponseDO msgDO : sortedMessages) {
-        logger.info("do {}", JacksonUtils.toJson(msgDO));
-      }
+      // Get 100 messages only
+      // TODO: change limit to 100
 
-      GetUserToUserMessagesResponseDO userMessagesDO =
-          new GetUserToUserMessagesResponseDO(sortedMessages);
+      List<GetUserToUserMessageResponseDO> page1 =
+          sortedMessages.stream().limit(5).collect(Collectors.toList());
+
+      GetUserToUserMessagesResponseDO userMessagesDO = new GetUserToUserMessagesResponseDO(page1);
+
+      Long lastRead = page1.get(4).getSentAt();
+      logger.info("last read in the list:{}", lastRead);
+
+      Statement updateActiveChat = QueryBuilder
+          .insertInto(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
+          .values(
+              List.of(DatabaseConstants.USERNAME1_COLUMN, DatabaseConstants.USERNAME2_COLUMN,
+                  DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN),
+              List.of(username, username2, lastRead))
+          .using(QueryBuilder.ttl(CassandraConstants.DEFAULT_CHAT_DATA_EXPIRY_TTL))
+          .setConsistencyLevel(ConsistencyLevel.LOCAL_ONE);
+      chatSession.execute(updateActiveChat);
+
       return userMessagesDO;
     } catch (Exception e) {
       logger.error(StringUtils.printStackTrace(e));

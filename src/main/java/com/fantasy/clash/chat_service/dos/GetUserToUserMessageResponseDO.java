@@ -13,4 +13,5 @@ public class GetUserToUserMessageResponseDO {
   private String sender;
   private String message;
   private Long sentAt;
+  private Boolean isRead;
 }

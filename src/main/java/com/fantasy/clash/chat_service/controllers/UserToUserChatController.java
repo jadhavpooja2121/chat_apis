@@ -28,7 +28,7 @@ import com.fantasy.clash.framework.http.header.dos.LoginContext;
 import com.fantasy.clash.framework.utils.StringUtils;
 
 @RestController
-@RequestMapping("v1/chat_service/")
+@RequestMapping("v1/chat_service/user_to_user_chat")
 public class UserToUserChatController extends BaseController {
   private static final Logger logger = LoggerFactory.getLogger(UserToUserChatController.class);
 
@@ -44,7 +44,7 @@ public class UserToUserChatController extends BaseController {
       @RequestBody SendUserToUserMessageDO sendUserToUserMessageDO,
       @RequestParam(required = true) String username, HttpServletRequest request) {
     Long startTime = System.currentTimeMillis();
-    String apiEndPoint = "/chat_service/send";
+    String apiEndPoint = "/chat_service/user_to_user_chat/send";
     DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
     try {
       LoginContext loginContext = getLoginContext(request);
@@ -92,7 +92,7 @@ public class UserToUserChatController extends BaseController {
       @RequestParam(required = true) String username,
       @RequestParam(required = true) String username2, HttpServletRequest request) {
     Long startTime = System.currentTimeMillis();
-    String apiEndPoint = "/chat_service/get";
+    String apiEndPoint = "/chat_service/user_to_user_chat/get";
     DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
     try {
       LoginContext loginContext = getLoginContext(request);
