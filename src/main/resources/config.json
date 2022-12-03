@@ -10,5 +10,6 @@
 	"cassandra.fantasy_clash.contactpoints": "127.0.0.1",
 	"cassandra.fantasy_clash.port": "9042",
 	"message.min.length": "1",
-	"message.max.length": "100"
+	"message.max.length": "100",
+	"page.size":"5"
 }

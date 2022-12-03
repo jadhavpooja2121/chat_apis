@@ -16,4 +16,5 @@ public class PropertyConstants {
       "async.threadpool.await.termination.seconds";
   public static final String MESSAGE_MIN_LENGTH = "message.min.length";
   public static final String MESSAGE_MAX_LENGTH = "message.max.length";
+  public static final String PAGE_SIZE = "page.size";
 }

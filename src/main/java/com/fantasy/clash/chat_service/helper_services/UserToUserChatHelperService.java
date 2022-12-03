@@ -25,12 +25,14 @@ import com.datastax.driver.core.querybuilder.QueryBuilder;
 import com.datastax.driver.core.querybuilder.Select;
 import com.fantasy.clash.chat_service.constants.CassandraConstants;
 import com.fantasy.clash.chat_service.constants.DatabaseConstants;
+import com.fantasy.clash.chat_service.constants.PropertyConstants;
 import com.fantasy.clash.chat_service.constants.ResponseErrorCodes;
 import com.fantasy.clash.chat_service.constants.ResponseErrorMessages;
 import com.fantasy.clash.chat_service.dos.GetUserToUserMessageResponseDO;
 import com.fantasy.clash.chat_service.dos.GetUserToUserMessagesResponseDO;
 import com.fantasy.clash.chat_service.dos.SendUserToUserMessageResponseDO;
 import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
+import com.fantasy.clash.framework.configuration.Configurator;
 import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
 import com.fantasy.clash.framework.utils.JacksonUtils;
 import com.fantasy.clash.framework.utils.StringUtils;
@@ -42,6 +44,9 @@ public class UserToUserChatHelperService {
   @Autowired
   @Qualifier("chatSession")
   private Session chatSession;
+
+  @Autowired
+  private Configurator configurator;
 
   public SendUserToUserMessageResponseDO saveMessage(String groupChatId, String username,
       String recipient, String message, Long timestamp) {
@@ -163,8 +168,8 @@ public class UserToUserChatHelperService {
         // Get 100 messages only
         // TODO: change limit to 100
 
-        List<GetUserToUserMessageResponseDO> page1 =
-            sortedMessages.stream().limit(5).collect(Collectors.toList());
+        List<GetUserToUserMessageResponseDO> page1 = sortedMessages.stream()
+            .limit(configurator.getInt(PropertyConstants.PAGE_SIZE)).collect(Collectors.toList());
 
         GetUserToUserMessagesResponseDO userMessagesDO = new GetUserToUserMessagesResponseDO(page1);
 
@@ -247,8 +252,8 @@ public class UserToUserChatHelperService {
       // Get 100 messages only
       // TODO: change limit to 100
 
-      List<GetUserToUserMessageResponseDO> pageN =
-          sortedMessages.stream().limit(5).collect(Collectors.toList());
+      List<GetUserToUserMessageResponseDO> pageN = sortedMessages.stream()
+          .limit(configurator.getInt(PropertyConstants.PAGE_SIZE)).collect(Collectors.toList());
       logger.info("page1 {}", JacksonUtils.toJson(pageN));
 
       GetUserToUserMessagesResponseDO userMessagesDO = new GetUserToUserMessagesResponseDO(pageN);
@@ -321,17 +326,16 @@ public class UserToUserChatHelperService {
       // Get 100 messages only
       // TODO: change limit to 100
 
-      List<GetUserToUserMessageResponseDO> pageN =
-          sortedMessages.stream().limit(5).collect(Collectors.toList());
-//      List<GetUserToUserMessageResponseDO> reverseList = new ArrayList<>();
-//      for (int i = pageN.size() - 1; i >= 0; i--) {
-//        GetUserToUserMessageResponseDO msgDO = pageN.get(i);
-//        reverseList.add(msgDO);
-//      }
-//      logger.info("reverse {}", JacksonUtils.toJson(reverseList));
+      List<GetUserToUserMessageResponseDO> pageN = sortedMessages.stream()
+          .limit(configurator.getInt(PropertyConstants.PAGE_SIZE)).collect(Collectors.toList());
+      // List<GetUserToUserMessageResponseDO> reverseList = new ArrayList<>();
+      // for (int i = pageN.size() - 1; i >= 0; i--) {
+      // GetUserToUserMessageResponseDO msgDO = pageN.get(i);
+      // reverseList.add(msgDO);
+      // }
+      // logger.info("reverse {}", JacksonUtils.toJson(reverseList));
 
-      GetUserToUserMessagesResponseDO userMessagesDO =
-          new GetUserToUserMessagesResponseDO(pageN);
+      GetUserToUserMessagesResponseDO userMessagesDO = new GetUserToUserMessagesResponseDO(pageN);
 
       return userMessagesDO;
     } catch (Exception e) {
