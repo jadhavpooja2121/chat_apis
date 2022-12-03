@@ -14,4 +14,5 @@ public class ResponseErrorCodes {
   public static final Integer INVALID_MESSAGE_LENGTH = 1117;
   public static final Integer INVALID_TIMESTAMP = 1119;
   public static final Integer NO_MESSAGES_IN_CHAT = 1121;
+  public static final Integer SENDER_AND_RECIPIENT_SAME = 1123;
 }

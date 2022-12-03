@@ -75,4 +75,12 @@ public class RequestValidator {
     }
     return null;
   }
+
+  public static ErrorResponseDO validateIsSenderAndReceiverSame(String username, String recipient) {
+    if (username.equals(recipient)) {
+      return new ErrorResponseDO(ResponseErrorCodes.SENDER_AND_RECIPIENT_SAME,
+          ResponseErrorMessages.SENDER_AND_RECIPIENT_SAME);
+    }
+    return null;
+  }
 }

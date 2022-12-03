@@ -33,9 +33,9 @@ public class UserToUserChatService {
   public void sendMessage(String username, SendUserToUserMessageDO sendUserToUserMessageDO,
       CompletableFuture<ResponseEntity<?>> cf) {
     try {
-      String groupChatId = HashUtils.getHash(username, sendUserToUserMessageDO.getUsername2());
+      String groupChatId = HashUtils.getHash(username, sendUserToUserMessageDO.getRecipient());
       SendUserToUserMessageResponseDO sendUserToUserMessageResponseDO = userToUserChatHelperService
-          .saveMessage(groupChatId, username, sendUserToUserMessageDO.getUsername2(),
+          .saveMessage(groupChatId, username, sendUserToUserMessageDO.getRecipient(),
               sendUserToUserMessageDO.getMessage(), TimeConversionUtils.getGMTTime());
       if (sendUserToUserMessageResponseDO != null) {
         cf.complete(ResponseEntity.ok(new OkResponseDO<>(sendUserToUserMessageResponseDO)));
@@ -46,14 +46,14 @@ public class UserToUserChatService {
     }
   }
 
-  public void getMessage(String username, String username2,
-      Long timestamp, boolean isNext, CompletableFuture<ResponseEntity<?>> cf) {
-    logger.info("request from {} to get messages by {}", username, username2);
+  public void getMessage(String username, String sender, Long timestamp, boolean isNext,
+      CompletableFuture<ResponseEntity<?>> cf) {
+    logger.info("request from {} to get messages by {}", username, sender);
     try {
-      String groupChatId = HashUtils.getHash(username, username2);
+      String groupChatId = HashUtils.getHash(username, sender);
       logger.info("get hash {}", groupChatId);
-      GetUserToUserMessagesResponseDO messagesList =
-          userToUserChatHelperService.getUserMessages(groupChatId, username, username2, timestamp, isNext);
+      GetUserToUserMessagesResponseDO messagesList = userToUserChatHelperService
+          .getUserMessages(groupChatId, username, sender, timestamp, isNext);
       if (messagesList == null) {
         cf.complete(ResponseEntity.ok(new ErrorResponseDO(ResponseErrorCodes.NO_MESSAGES_IN_CHAT,
             ResponseErrorMessages.NO_MESSAGES_IN_CHAT)));

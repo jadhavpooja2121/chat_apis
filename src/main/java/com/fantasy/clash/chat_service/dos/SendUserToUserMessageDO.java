@@ -10,7 +10,6 @@ import lombok.Setter;
 @AllArgsConstructor
 @NoArgsConstructor
 public class SendUserToUserMessageDO {
-  private String username2;
-  private Long user2Id;
+  private String recipient;
   private String message;
 }

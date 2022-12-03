@@ -41,18 +41,25 @@ public class UserToUserChatController extends BaseController {
   @PostMapping(value = "/send", produces = MediaType.APPLICATION_JSON_VALUE,
       consumes = MediaType.APPLICATION_JSON_VALUE)
   public DeferredResult<ResponseEntity<?>> sendMessage(
-      @RequestBody SendUserToUserMessageDO sendUserToUserMessageDO,
-      @RequestParam(required = true) String username, HttpServletRequest request) {
+      @RequestBody SendUserToUserMessageDO sendUserToUserMessageDO, HttpServletRequest request) {
     Long startTime = System.currentTimeMillis();
     String apiEndPoint = "/chat_service/user_to_user_chat/send";
     DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
     try {
       LoginContext loginContext = getLoginContext(request);
-      logger.debug("Received send messge request from {} ", loginContext.getUserId());
+      String username = loginContext.getUsername();
+      logger.info("Received send message request from user {} ", username);
       CompletableFuture<ResponseEntity<?>> cf = new CompletableFuture<ResponseEntity<?>>();
       ErrorResponseDO usernameValidationDO = RequestValidator.validateUsername(username);
       if (usernameValidationDO != null) {
         cf.complete(ResponseEntity.ok(usernameValidationDO));
+        this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
+        return df;
+      }
+      ErrorResponseDO validateIfSenderAndRecipientSameDO = RequestValidator
+          .validateIsSenderAndReceiverSame(username, sendUserToUserMessageDO.getRecipient());
+      if (validateIfSenderAndRecipientSameDO != null) {
+        cf.complete(ResponseEntity.ok(validateIfSenderAndRecipientSameDO));
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
@@ -88,9 +95,7 @@ public class UserToUserChatController extends BaseController {
   }
 
   @GetMapping(value = "/get", produces = MediaType.APPLICATION_JSON_VALUE)
-  public DeferredResult<ResponseEntity<?>> getMessage(
-      @RequestParam(required = true) String username,
-      @RequestParam(required = true) String username2,
+  public DeferredResult<ResponseEntity<?>> getMessage(@RequestParam(required = true) String sender,
       @RequestParam(required = true, defaultValue = "0") Long timestamp,
       @RequestParam(required = true, defaultValue = "true") boolean isNext,
       HttpServletRequest request) {
@@ -99,7 +104,8 @@ public class UserToUserChatController extends BaseController {
     DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
     try {
       LoginContext loginContext = getLoginContext(request);
-      logger.debug("Received send messge request from {} ", loginContext.getUserId());
+      String username = loginContext.getUsername();
+      logger.info("Received get messages from {} by {}", sender, username);
       CompletableFuture<ResponseEntity<?>> cf = new CompletableFuture<ResponseEntity<?>>();
       ErrorResponseDO usernameValidationDO = RequestValidator.validateUsername(username);
       if (usernameValidationDO != null) {
@@ -107,13 +113,13 @@ public class UserToUserChatController extends BaseController {
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-      ErrorResponseDO OtherUserNameValidationDO = RequestValidator.validateUsername(username2);
-      if (OtherUserNameValidationDO != null) {
-        cf.complete(ResponseEntity.ok(OtherUserNameValidationDO));
+      ErrorResponseDO recipientNameValidationDO = RequestValidator.validateUsername(sender);
+      if (recipientNameValidationDO != null) {
+        cf.complete(ResponseEntity.ok(recipientNameValidationDO));
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-      userToUserChatService.getMessage(username, username2, timestamp, isNext, cf);
+      userToUserChatService.getMessage(username, sender, timestamp, isNext, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
       logger.error("Get message request failed due to {}", StringUtils.printStackTrace(e));
