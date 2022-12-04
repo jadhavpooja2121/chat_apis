@@ -16,7 +16,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.async.DeferredResult;
-import com.fantasy.clash.chat_service.dos.SendMessageDO;
+import com.fantasy.clash.chat_service.dos.SaveGroupChatMessageDO;
+import com.fantasy.clash.chat_service.dos.SendGroupChatMessageDO;
 import com.fantasy.clash.chat_service.services.GroupChatService;
 import com.fantasy.clash.chat_service.validators.RequestValidator;
 import com.fantasy.clash.framework.http.constants.ErrorConstants;
@@ -29,48 +30,51 @@ import com.fantasy.clash.framework.http.header.dos.LoginContext;
 import com.fantasy.clash.framework.utils.StringUtils;
 
 @RestController
-@RequestMapping("/v1/chat_service/{contestId}")
+@RequestMapping("/v1/chat_service/group_chats/{groupChatId}")
 public class GroupChatController extends BaseController {
   private static final Logger logger = LoggerFactory.getLogger(GroupChatController.class);
 
   @Autowired
   private GroupChatService groupChatService;
-  
+
   @Autowired
   private RequestValidator requestValidator;
 
   @PostMapping(value = "/send", produces = MediaType.APPLICATION_JSON_VALUE,
       consumes = MediaType.APPLICATION_JSON_VALUE)
-  public DeferredResult<ResponseEntity<?>> sendMessage(@PathVariable Long contestId,
-      @RequestBody SendMessageDO sendMessageDO, HttpServletRequest request) {
+  public DeferredResult<ResponseEntity<?>> sendMessage(@PathVariable Long groupChatId,
+      @RequestBody SendGroupChatMessageDO sendGroupChatMessageDO, HttpServletRequest request) {
     Long startTime = System.currentTimeMillis();
-    String apiEndPoint = "/chat_service/{contestId}/send";
+    String apiEndPoint = "/chat_service/group_chats/{groupChatId}/send";
     DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
     try {
       LoginContext loginContext = getLoginContext(request);
-      logger.debug("Received send messge request from {} ", loginContext.getUserId());
+      String username = loginContext.getUsername();
+      logger.debug("Received send messge request from user {}", loginContext.getUserId());
       CompletableFuture<ResponseEntity<?>> cf = new CompletableFuture<ResponseEntity<?>>();
-      ErrorResponseDO contestIdValidationDO = RequestValidator.validateContestId(contestId);
-      if (contestIdValidationDO != null) {
-        cf.complete(ResponseEntity.ok(contestIdValidationDO));
+      ErrorResponseDO groupChatIdValidationDO = RequestValidator.validateGroupChatId(groupChatId);
+      if (groupChatIdValidationDO != null) {
+        cf.complete(ResponseEntity.ok(groupChatIdValidationDO));
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
       ErrorResponseDO sendMessageReqValidationDO =
-          RequestValidator.validateSendMessageRequest(sendMessageDO);
+          RequestValidator.validateSendMessageRequest(sendGroupChatMessageDO);
       if (sendMessageReqValidationDO != null) {
         cf.complete(ResponseEntity.ok(sendMessageReqValidationDO));
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
       ErrorResponseDO messageLengthValidationDO =
-        requestValidator.validateMessageLength(sendMessageDO.getMessage());
+          requestValidator.validateMessageLength(sendGroupChatMessageDO.getMessage());
       if (messageLengthValidationDO != null) {
         cf.complete(ResponseEntity.ok(messageLengthValidationDO));
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-      groupChatService.sendMessage(contestId, sendMessageDO, cf);
+      SaveGroupChatMessageDO saveGroupChatMessageDO =
+          new SaveGroupChatMessageDO(username, sendGroupChatMessageDO.getMessage());
+      groupChatService.sendMessage(groupChatId, saveGroupChatMessageDO, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
       logger.error("Send message request failed due to {}", StringUtils.printStackTrace(e));
@@ -88,19 +92,19 @@ public class GroupChatController extends BaseController {
   }
 
   @GetMapping(value = "/get", produces = MediaType.APPLICATION_JSON_VALUE)
-  public DeferredResult<ResponseEntity<?>> getMessage(@PathVariable Long contestId,
-      @RequestParam(required = true) String username,
+  public DeferredResult<ResponseEntity<?>> getMessage(@PathVariable Long groupChatId,
       @RequestParam(required = true, defaultValue = "0") Long timestamp,
       @RequestParam(required = true, defaultValue = "true") boolean isNext,
       HttpServletRequest request) {
     Long startTime = System.currentTimeMillis();
-    String apiEndPoint = "/chat_service/{contestId}/get";
+    String apiEndPoint = "/chat_service/group_chats/{groupChatId}/get";
     DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
     try {
       LoginContext loginContext = getLoginContext(request);
       logger.debug("Received read messge request from {} ", loginContext.getUserId());
+      String username = loginContext.getUsername();
       CompletableFuture<ResponseEntity<?>> cf = new CompletableFuture<ResponseEntity<?>>();
-      ErrorResponseDO contestIdValidationDO = RequestValidator.validateContestId(contestId);
+      ErrorResponseDO contestIdValidationDO = RequestValidator.validateGroupChatId(groupChatId);
       if (contestIdValidationDO != null) {
         cf.complete(ResponseEntity.ok(contestIdValidationDO));
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
@@ -118,7 +122,7 @@ public class GroupChatController extends BaseController {
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-      groupChatService.getMessage(contestId, username, timestamp, isNext, cf);
+      groupChatService.getMessage(groupChatId, username, timestamp, isNext, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
       logger.error("Get message request failed due to {}", StringUtils.printStackTrace(e));
@@ -136,17 +140,18 @@ public class GroupChatController extends BaseController {
   }
 
   @GetMapping(value = "/message-notify", produces = MediaType.APPLICATION_JSON_VALUE)
-  public DeferredResult<ResponseEntity<?>> notify(@PathVariable Long contestId,
-      @RequestParam String username, HttpServletRequest request) {
+  public DeferredResult<ResponseEntity<?>> notify(@PathVariable Long groupChatId,
+      HttpServletRequest request) {
     Long startTime = System.currentTimeMillis();
-    String apiEndPoint = "/chat_service/{contestId}/message-notify";
+    String apiEndPoint = "/chat_service/group_chats/{groupChatId}/message-notify";
     DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
     try {
       LoginContext loginContext = getLoginContext(request);
       logger.debug("Received get message notification messge request from {} ",
           loginContext.getUserId());
+      String username = loginContext.getUsername();
       CompletableFuture<ResponseEntity<?>> cf = new CompletableFuture<ResponseEntity<?>>();
-      ErrorResponseDO contestIdValidationDO = RequestValidator.validateContestId(contestId);
+      ErrorResponseDO contestIdValidationDO = RequestValidator.validateGroupChatId(groupChatId);
       if (contestIdValidationDO != null) {
         cf.complete(ResponseEntity.ok(contestIdValidationDO));
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
@@ -158,7 +163,7 @@ public class GroupChatController extends BaseController {
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-      groupChatService.notify(contestId, username, cf);
+      groupChatService.notify(groupChatId, username, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
       logger.error("message notify request failed due to {}", StringUtils.printStackTrace(e));

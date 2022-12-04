@@ -9,7 +9,6 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class SendMessageDO {
-  private String username;
-  private String message;
+public class GroupChatMessageNotificationDO {
+  private Long messageCnt;
 }

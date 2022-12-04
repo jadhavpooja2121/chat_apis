@@ -135,5 +135,40 @@ public class UserToUserChatController extends BaseController {
     }
     return df;
   }
+  
+  @GetMapping(value = "/chats", produces = MediaType.APPLICATION_JSON_VALUE)
+  public DeferredResult<ResponseEntity<?>> getUserChats(
+      @RequestParam(required = true, defaultValue = "true") boolean isNext,
+      HttpServletRequest request) {
+    Long startTime = System.currentTimeMillis();
+    String apiEndPoint = "/chat_service/user_to_user_chat/chats";
+    DeferredResult<ResponseEntity<?>> df = new DeferredResult<ResponseEntity<?>>();
+    try {
+      LoginContext loginContext = getLoginContext(request);
+      String username = loginContext.getUsername();
+      logger.info("Received get all chats request from {}", username);
+      CompletableFuture<ResponseEntity<?>> cf = new CompletableFuture<ResponseEntity<?>>();
+      ErrorResponseDO usernameValidationDO = RequestValidator.validateUsername(username);
+      if (usernameValidationDO != null) {
+        cf.complete(ResponseEntity.ok(usernameValidationDO));
+        this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
+        return df;
+      }
+      userToUserChatService.getChats(username, isNext, cf);
+      this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
+    } catch (Exception e) {
+      logger.error("Get chats request failed due to {}", StringUtils.printStackTrace(e));
+      ErrorResponse errorResponse = new ErrorResponse();
+      if (e instanceof InvalidLoginContextHeaderException) {
+        errorResponse.setCode(ErrorConstants.LOGIN_CONTEXT_HEADER_ERROR_CODE);
+        errorResponse.setMessage(ErrorMessages.UNKNOWN_ERROR_MESSAGE);
+      } else {
+        errorResponse.setCode(ErrorConstants.UNKNOWN_ERROR_CODE);
+        errorResponse.setMessage(ErrorMessages.UNKNOWN_ERROR_MESSAGE);
+      }
+      df.setResult(ResponseEntity.ok(errorResponse));
+    }
+    return df;
+  }
 
 }

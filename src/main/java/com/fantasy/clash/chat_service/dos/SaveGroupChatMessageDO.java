@@ -9,9 +9,7 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class SendMessageResponseDO {
+public class SaveGroupChatMessageDO {
   private String username;
   private String message;
-  private Long sentAt;
-  private Boolean isRead;
 }

@@ -65,4 +65,13 @@ public class UserToUserChatService {
       logger.error(StringUtils.printStackTrace(e));
     }
   }
+  
+  public void getChats(String username, boolean isNext, CompletableFuture<ResponseEntity<?>> cf) {
+    try {
+      
+    } catch(Exception e) {
+      logger.error(StringUtils.printStackTrace(e));
+    }
+    
+  }
 }

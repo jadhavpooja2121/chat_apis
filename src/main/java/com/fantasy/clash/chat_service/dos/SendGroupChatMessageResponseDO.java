@@ -1,6 +1,5 @@
 package com.fantasy.clash.chat_service.dos;
 
-import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -8,8 +7,10 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@AllArgsConstructor
 @NoArgsConstructor
-public class GetMessageResponseDO {
-  private List<SendMessageResponseDO> messages;
+@AllArgsConstructor
+public class SendGroupChatMessageResponseDO {
+  private String username;
+  private String message;
+  private Long sentAt;
 }
