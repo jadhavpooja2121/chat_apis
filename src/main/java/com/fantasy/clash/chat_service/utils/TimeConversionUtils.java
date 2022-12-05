@@ -11,5 +11,4 @@ public class TimeConversionUtils {
     long timeInMillis = Calendar.getInstance(TimeZone.getTimeZone("GMT")).getTimeInMillis();
     return timeInMillis;
   }
-
 }
