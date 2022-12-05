@@ -63,12 +63,23 @@ public class GroupChatHelperService {
       }
       logger.info("userMsgsTimestampList:{}", userMsgsTimestampList);
 
-      Long lastreadtime = Collections.max(userMsgsTimestampList).longValue();
-      logger.info("lastRead:{}", lastreadtime);
+      Long latestReadTime = Collections.max(userMsgsTimestampList).longValue();
+      logger.info("lastRead:{}", latestReadTime);
 
-      redis.hmset(RedisConstants.REDIS_ALIAS,
-          RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username,
-          lastreadtime.toString());
+      String userLastReadTime = redis.hget(RedisConstants.REDIS_ALIAS,
+          RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username);
+      if (StringUtils.isEmpty(userLastReadTime)) {
+        redis.hmset(RedisConstants.REDIS_ALIAS,
+            RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username,
+            latestReadTime.toString());
+      } else {
+        Long lastReadTimestamp = StringUtils.convertToLong(userLastReadTime);
+        if (lastReadTimestamp < latestReadTime) {
+          redis.hmset(RedisConstants.REDIS_ALIAS,
+              RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username,
+              latestReadTime.toString());
+        }
+      }
 
       List<GetGroupChatMessageResponseDO> messageList = new ArrayList<>();
       for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {

@@ -28,9 +28,12 @@ import com.fantasy.clash.chat_service.constants.DatabaseConstants;
 import com.fantasy.clash.chat_service.constants.PropertyConstants;
 import com.fantasy.clash.chat_service.constants.ResponseErrorCodes;
 import com.fantasy.clash.chat_service.constants.ResponseErrorMessages;
+import com.fantasy.clash.chat_service.dos.GetUserChatsResponseDO;
 import com.fantasy.clash.chat_service.dos.GetUserToUserMessageResponseDO;
 import com.fantasy.clash.chat_service.dos.GetUserToUserMessagesResponseDO;
 import com.fantasy.clash.chat_service.dos.SendUserToUserMessageResponseDO;
+import com.fantasy.clash.chat_service.dos.UserActiveChatsDO;
+import com.fantasy.clash.chat_service.dos.UserToUserChatResponseDO;
 import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
 import com.fantasy.clash.framework.configuration.Configurator;
 import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
@@ -350,6 +353,61 @@ public class UserToUserChatHelperService {
       logger.info(StringUtils.printStackTrace(e));
     }
     return null;
+  }
 
+  public GetUserChatsResponseDO getActiveChats(String username) {
+    try {
+      Statement selectActiveUsersAndLastActiveAt = QueryBuilder
+          .select(DatabaseConstants.USERNAME2_COLUMN,
+              DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN)
+          .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
+          .where(QueryBuilder.eq(DatabaseConstants.USERNAME1_COLUMN, username));
+
+      ResultSet activeUsersAndLastSeenAt = chatSession.execute(selectActiveUsersAndLastActiveAt);
+
+      List<UserActiveChatsDO> activeChatUsersAndLastActiveAtList = new ArrayList<>();
+      for (Row user : activeUsersAndLastSeenAt.all()) {
+        UserActiveChatsDO userAndLastSeenAt =
+            new UserActiveChatsDO(user.getString(0), user.getLong(1));
+        activeChatUsersAndLastActiveAtList.add(userAndLastSeenAt);
+      }
+
+      logger.info("activeChatUsersAndLastActiveAtList:{}",
+          JacksonUtils.toJson(activeChatUsersAndLastActiveAtList));
+
+      List<UserToUserChatResponseDO> userChats = new ArrayList<>();
+
+     
+      for ( int i = 0; i < activeChatUsersAndLastActiveAtList.size(); i++) {
+        UserActiveChatsDO userActiveChatsDO = activeChatUsersAndLastActiveAtList.get(i);
+        String sender = userActiveChatsDO.getAttender();
+        Long lastRead = userActiveChatsDO.getLastSeenAt();
+
+        Statement getUserLatestMessages = QueryBuilder.select(DatabaseConstants.MESSAGE_TEXT_COLUMN)
+            .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.USER_CHATS_TABLE)
+            .allowFiltering()
+            .where(QueryBuilder.eq(DatabaseConstants.MESSAGE_SENDER_COLUMN, sender))
+            .and(QueryBuilder.gt(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN, lastRead));
+        ResultSet userLatestMessages = chatSession.execute(getUserLatestMessages);
+        int count = 0;
+        for (Row result : userLatestMessages.all()) {
+          count++;
+        }
+
+        UserToUserChatResponseDO userChatResponseDO = new UserToUserChatResponseDO();
+        userChatResponseDO.setSender(sender);
+        userChatResponseDO.setLastSeenAt(TimeConversionUtils.getGMTTime() - lastRead);
+        userChatResponseDO.setNotificationText(String.format("%s new message(s)", count));
+        userChats.add(userChatResponseDO);
+      }
+      logger.info("userChats list {}", userChats);
+     
+      GetUserChatsResponseDO getUserChatsResponseDO = new GetUserChatsResponseDO(userChats);
+      return getUserChatsResponseDO;
+
+    } catch (Exception e) {
+      logger.error(StringUtils.printStackTrace(e));
+    }
+    return null;
   }
 }

@@ -9,7 +9,6 @@ public class TimeConversionUtils {
   private static final Logger logger = LoggerFactory.getLogger(TimeConversionUtils.class);
   public static Long getGMTTime() {
     long timeInMillis = Calendar.getInstance(TimeZone.getTimeZone("GMT")).getTimeInMillis();
-    logger.info("timeInMillis {}", timeInMillis);
     return timeInMillis;
   }
 

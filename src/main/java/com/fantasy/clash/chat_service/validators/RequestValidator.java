@@ -31,8 +31,8 @@ public class RequestValidator {
 
   public static ErrorResponseDO validateGroupChatId(Long groupChatId) {
     if (groupChatId == null || groupChatId < 0) {
-      return new ErrorResponseDO(ResponseErrorCodes.CONTEST_ID_INVALID,
-          ResponseErrorMessages.CONTEST_ID_INVALID);
+      return new ErrorResponseDO(ResponseErrorCodes.GROUP_CHAT_ID_INVALID,
+          ResponseErrorMessages.GROUP_CHAT_ID_INVALID);
     }
     return null;
   }

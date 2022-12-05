@@ -10,8 +10,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import com.datastax.driver.core.ResultSet;
+import com.datastax.driver.core.Statement;
+import com.datastax.driver.core.querybuilder.QueryBuilder;
+import com.fantasy.clash.chat_service.constants.DatabaseConstants;
 import com.fantasy.clash.chat_service.constants.ResponseErrorCodes;
 import com.fantasy.clash.chat_service.constants.ResponseErrorMessages;
+import com.fantasy.clash.chat_service.dos.GetUserChatsResponseDO;
 import com.fantasy.clash.chat_service.dos.GetUserToUserMessagesResponseDO;
 import com.fantasy.clash.chat_service.dos.SendUserToUserMessageDO;
 import com.fantasy.clash.chat_service.dos.SendUserToUserMessageResponseDO;
@@ -58,20 +63,26 @@ public class UserToUserChatService {
         cf.complete(ResponseEntity.ok(new ErrorResponseDO(ResponseErrorCodes.NO_MESSAGES_IN_CHAT,
             ResponseErrorMessages.NO_MESSAGES_IN_CHAT)));
         return;
-      } else {
-        cf.complete(ResponseEntity.ok(new OkResponseDO<>(messagesList)));
       }
+      cf.complete(ResponseEntity.ok(new OkResponseDO<>(messagesList)));
     } catch (Exception e) {
       logger.error(StringUtils.printStackTrace(e));
     }
   }
-  
+
   public void getChats(String username, boolean isNext, CompletableFuture<ResponseEntity<?>> cf) {
     try {
-      
-    } catch(Exception e) {
+
+      GetUserChatsResponseDO userActiveChatsDO = userToUserChatHelperService.getActiveChats(username);
+      if (userActiveChatsDO == null) {
+        cf.complete(ResponseEntity.ok(new ErrorResponseDO(ResponseErrorCodes.NO_ACTIVE_USER_CHATS,
+            ResponseErrorMessages.NO_ACTIVE_USER_CHATS)));
+        return;
+      }
+      cf.complete(ResponseEntity.ok(new OkResponseDO<>(userActiveChatsDO)));
+    } catch (Exception e) {
       logger.error(StringUtils.printStackTrace(e));
     }
-    
+
   }
 }
