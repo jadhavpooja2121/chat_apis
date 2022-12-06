@@ -53,7 +53,6 @@ public class GroupChatService {
     try {
       Set<String> members = redis.zrange(RedisConstants.REDIS_ALIAS,
           RedisServiceUtils.contestGroupChatKey(groupChatId), 0D, Long.MAX_VALUE);
-      logger.info("members {}", members);
       if (CollectionUtils.isEmpty(members)) {
         redis.zadd(RedisConstants.REDIS_ALIAS, RedisServiceUtils.contestGroupChatKey(groupChatId),
             TimeConversionUtils.getGMTTime(), JacksonUtils.toJson(saveGroupChatMessageDO));
@@ -78,7 +77,6 @@ public class GroupChatService {
     try {
       String lastReadTimestamp = redis.hget(RedisConstants.REDIS_ALIAS,
           RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username);
-      logger.info("user lastReadtime {}", lastReadTimestamp);
       Long min = timestamp;
       Long max = Long.MAX_VALUE;
       Integer pageSize = configurator.getInt(PropertyConstants.PAGE_SIZE);
@@ -87,32 +85,23 @@ public class GroupChatService {
         Set<TypedTuple<String>> membersWithScores =
             redis.zrangeByScoreWithScores(RedisConstants.REDIS_ALIAS,
                 RedisServiceUtils.contestGroupChatKey(groupChatId), min, max, 0, pageSize);
-        logger.info("membersWithScores {}", membersWithScores);
-
         if (CollectionUtils.isEmpty(membersWithScores)) {
           ErrorResponseDO noMessagesResponseDO = new ErrorResponseDO(
               ResponseErrorCodes.EMPTY_GROUP_CHAT, ResponseErrorMessages.EMPTY_GROUP_CHAT);
           cf.complete(ResponseEntity.ok(noMessagesResponseDO));
           return;
         }
-
         Map<Double, String> usernameMsgTimestampMap = new TreeMap<Double, String>();
         for (TypedTuple<String> val : membersWithScores) {
           usernameMsgTimestampMap.put(val.getScore(), val.getValue());
         }
-        logger.info("map <time, val> :{}", usernameMsgTimestampMap);
-
         List<Double> userMsgsTimestampList = new ArrayList<>();
         for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
           Double latestTimestamp = valMap.getKey();
           logger.info("latestTimestamp:{}", latestTimestamp);
           userMsgsTimestampList.add(latestTimestamp);
         }
-        logger.info("userMsgsTimestampList:{}", userMsgsTimestampList);
-
         Long lastreadtime = Collections.max(userMsgsTimestampList).longValue();
-        logger.info("lastRead:{}", lastreadtime);
-
         List<GetGroupChatMessageResponseDO> messageList = new ArrayList<>();
         for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
           SaveGroupChatMessageDO saveGroupChatMessageDO =
@@ -120,9 +109,6 @@ public class GroupChatService {
           messageList.add(new GetGroupChatMessageResponseDO(saveGroupChatMessageDO.getUsername(),
               saveGroupChatMessageDO.getMessage(), valMap.getKey().longValue(), false));
         }
-
-        logger.info("messageList {}", JacksonUtils.toJson(messageList));
-
         try {
           redis.hmget(RedisConstants.REDIS_ALIAS,
               RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username);
@@ -140,18 +126,14 @@ public class GroupChatService {
       } else {
         String prevReadtime = redis.hget(RedisConstants.REDIS_ALIAS,
             RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username);
-        logger.info("user lastReadtime {}", prevReadtime);
         Long lastRead = StringUtils.convertToLong(prevReadtime);
-
         if (isNext == true) {
           min = timestamp;
           groupChatHelperService.getNextMessages(groupChatId, username, min, max, lastRead,
               pageSize, cf);
         } else {
           min = timestamp;
-          logger.info("queried timestamp {}", timestamp);
           max = Long.MIN_VALUE;
-          logger.info("prev read timestamp {}", max);
           groupChatHelperService.getPreviousMessages(groupChatId, username, min, max, lastRead,
               pageSize, cf);
         }
@@ -163,18 +145,13 @@ public class GroupChatService {
 
   @Async("apiTaskExecutor")
   public void notify(Long groupChatId, String username, CompletableFuture<ResponseEntity<?>> cf) {
-
     try {
       String prevReadtime = redis.hget(RedisConstants.REDIS_ALIAS,
           RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username);
-      logger.info("user lastReadtime {}", prevReadtime);
       Long min = StringUtils.convertToLong(prevReadtime);
       Long max = Long.MAX_VALUE;
-
       long messageCnt = redis.zcount(RedisConstants.REDIS_ALIAS,
           RedisServiceUtils.contestGroupChatKey(groupChatId), min, max);
-      logger.info("unread message count:{}", messageCnt);
-
       if (messageCnt - 1 == 0) {
         ErrorResponseDO noNewMessageREsponseDO = new ErrorResponseDO(
             ResponseErrorCodes.NO_NEW_MESSAGES, ResponseErrorMessages.NO_NEW_MESSAGES);

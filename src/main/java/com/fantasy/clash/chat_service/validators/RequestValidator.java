@@ -64,7 +64,6 @@ public class RequestValidator {
 
   public ErrorResponseDO validateMessageLength(String message) {
     try {
-
       if (message.length() < configurator.getInt(PropertyConstants.MESSAGE_MIN_LENGTH)
           || message.length() > configurator.getInt(PropertyConstants.MESSAGE_MAX_LENGTH)) {
         return new ErrorResponseDO(ResponseErrorCodes.INVALID_MESSAGE_LENGTH,

@@ -56,7 +56,6 @@ public class UserToUserChatService {
     logger.info("request from {} to get messages by {}", username, sender);
     try {
       String groupChatId = HashUtils.getHash(username, sender);
-      logger.info("get hash {}", groupChatId);
       GetUserToUserMessagesResponseDO messagesList = userToUserChatHelperService
           .getUserMessages(groupChatId, username, sender, timestamp, isNext);
       if (messagesList == null) {
@@ -70,7 +69,7 @@ public class UserToUserChatService {
     }
   }
 
-  public void getChats(String username, boolean isNext, CompletableFuture<ResponseEntity<?>> cf) {
+  public void getChats(String username, CompletableFuture<ResponseEntity<?>> cf) {
     try {
 
       GetUserChatsResponseDO userActiveChatsDO = userToUserChatHelperService.getActiveChats(username);

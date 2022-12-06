@@ -9,8 +9,8 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserToUserChatResponseDO {
+public class UserToUserChatDO {
   private String sender;
-  private Long lastMessageTime;
+  private String lastMessageTime;
   private String notificationText;
 }

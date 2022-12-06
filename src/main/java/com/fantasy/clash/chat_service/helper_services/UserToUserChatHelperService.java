@@ -33,6 +33,7 @@ import com.fantasy.clash.chat_service.dos.GetUserToUserMessageResponseDO;
 import com.fantasy.clash.chat_service.dos.GetUserToUserMessagesResponseDO;
 import com.fantasy.clash.chat_service.dos.SendUserToUserMessageResponseDO;
 import com.fantasy.clash.chat_service.dos.UserActiveChatsDO;
+import com.fantasy.clash.chat_service.dos.UserToUserChatDO;
 import com.fantasy.clash.chat_service.dos.UserToUserChatResponseDO;
 import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
 import com.fantasy.clash.framework.configuration.Configurator;
@@ -76,7 +77,6 @@ public class UserToUserChatHelperService {
           .setConsistencyLevel(ConsistencyLevel.LOCAL_ONE);
       chatSession.execute(insertUserLastReadTime);
 
-      // Add row for another user with timestamp less than 1st user's last read
       Statement getUserLastReadTime =
           QueryBuilder.select(DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN)
               .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
@@ -100,12 +100,10 @@ public class UserToUserChatHelperService {
       Long user2LastReadtime = null;
       for (Row lastRead : user2LastReadResult.all()) {
         user2LastReadtime = lastRead.getLong(0);
-        logger.info("user2LastReadtime:{}", user1LastReadtime);
       }
 
       if (user2LastReadtime == null) {
         Long defaultUser2LastRead = user1LastReadtime - 100;
-        logger.info("user2 last read:{}", defaultUser2LastRead);
         Statement insertUser2LastReadTime = QueryBuilder
             .insertInto(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
             .values(
@@ -144,23 +142,20 @@ public class UserToUserChatHelperService {
                 .where(QueryBuilder.eq(DatabaseConstants.USERNAME1_COLUMN, username))
                 .and(QueryBuilder.eq(DatabaseConstants.USERNAME2_COLUMN, sender));
         ResultSet getUserLastReadTimeResult = chatSession.execute(getUserLastReadTime);
-        Long user1LastReadtime = null;
+        Long userLastReadtime = null;
         for (Row lastRead : getUserLastReadTimeResult.all()) {
-          user1LastReadtime = lastRead.getLong(0);
-          logger.info("user1LastReadtime:{}", user1LastReadtime);
+          userLastReadtime = lastRead.getLong(0);
         }
 
         List<GetUserToUserMessageResponseDO> allMessages =
             new ArrayList<GetUserToUserMessageResponseDO>();
         Boolean isRead = null;
         for (Row msg : result.all()) {
-          isRead = msg.getLong(2) <= user1LastReadtime ? true : false;
+          isRead = msg.getLong(2) <= userLastReadtime ? true : false;
           GetUserToUserMessageResponseDO message = new GetUserToUserMessageResponseDO(
               msg.getString(0), msg.getString(1), msg.getLong(2), isRead);
           allMessages.add(message);
         }
-
-        logger.info("raw message list {}", JacksonUtils.toJson(allMessages));
 
         if (CollectionUtils.isEmpty(allMessages)) {
           return null;
@@ -169,20 +164,20 @@ public class UserToUserChatHelperService {
         List<GetUserToUserMessageResponseDO> sortedMessages =
             allMessages.stream().sorted((t1, t2) -> t1.getSentAt().compareTo(t2.getSentAt()))
                 .collect(Collectors.toList());
+
         logger.info("sorted message list {}", JacksonUtils.toJson(sortedMessages));
 
         // Get 100 messages only
         // TODO: change limit to 100
 
-        List<GetUserToUserMessageResponseDO> page1 = sortedMessages.stream()
+        List<GetUserToUserMessageResponseDO> pageN = sortedMessages.stream()
             .limit(configurator.getInt(PropertyConstants.PAGE_SIZE)).collect(Collectors.toList());
 
-        GetUserToUserMessagesResponseDO userMessagesDO = new GetUserToUserMessagesResponseDO(page1);
+        GetUserToUserMessagesResponseDO userMessagesDO = new GetUserToUserMessagesResponseDO(pageN);
 
-        Long lastRead = page1.get(page1.size() - 1).getSentAt();
-        logger.info("last read in the list:{}", lastRead);
+        Long lastRead = pageN.get(pageN.size() - 1).getSentAt();
 
-        if (user1LastReadtime < lastRead) {
+        if (userLastReadtime < lastRead) {
           Statement updateActiveChat = QueryBuilder
               .insertInto(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
               .values(
@@ -213,7 +208,6 @@ public class UserToUserChatHelperService {
 
   public GetUserToUserMessagesResponseDO getNextMessages(String groupChatId, String username,
       String sender, Long fromTimestamp) {
-    logger.info("Inside get next");
     try {
       Statement getMessages = QueryBuilder
           .select(DatabaseConstants.MESSAGE_SENDER_COLUMN, DatabaseConstants.MESSAGE_TEXT_COLUMN,
@@ -233,7 +227,6 @@ public class UserToUserChatHelperService {
       Long userLastReadtime = null;
       for (Row lastRead : getUserLastReadTimeResult.all()) {
         userLastReadtime = lastRead.getLong(0);
-        logger.info("user1LastReadtime:{}", userLastReadtime);
       }
 
       List<GetUserToUserMessageResponseDO> allMessages =
@@ -246,8 +239,6 @@ public class UserToUserChatHelperService {
         allMessages.add(message);
       }
 
-      logger.info("raw message list {}", JacksonUtils.toJson(allMessages));
-
       if (CollectionUtils.isEmpty(allMessages)) {
         return null;
       }
@@ -255,19 +246,16 @@ public class UserToUserChatHelperService {
       List<GetUserToUserMessageResponseDO> sortedMessages =
           allMessages.stream().sorted((t1, t2) -> t1.getSentAt().compareTo(t2.getSentAt()))
               .collect(Collectors.toList());
-      logger.info("sorted message list {}", JacksonUtils.toJson(sortedMessages));
 
       // Get 100 messages only
       // TODO: change limit to 100
 
       List<GetUserToUserMessageResponseDO> pageN = sortedMessages.stream()
           .limit(configurator.getInt(PropertyConstants.PAGE_SIZE)).collect(Collectors.toList());
-      logger.info("page1 {}", JacksonUtils.toJson(pageN));
 
       GetUserToUserMessagesResponseDO userMessagesDO = new GetUserToUserMessagesResponseDO(pageN);
 
       Long lastReadTime = pageN.get(pageN.size() - 1).getSentAt();
-      logger.info("last read in the list:{}", lastReadTime);
 
       if (userLastReadtime < lastReadTime) {
         Statement updateActiveChat = QueryBuilder
@@ -308,7 +296,6 @@ public class UserToUserChatHelperService {
       Long userLastReadtime = null;
       for (Row lastRead : getUserLastReadTimeResult.all()) {
         userLastReadtime = lastRead.getLong(0);
-        logger.info("user1LastReadtime:{}", userLastReadtime);
       }
 
       List<GetUserToUserMessageResponseDO> allMessages =
@@ -321,8 +308,6 @@ public class UserToUserChatHelperService {
         allMessages.add(message);
       }
 
-      logger.info("raw message list {}", JacksonUtils.toJson(allMessages));
-
       if (CollectionUtils.isEmpty(allMessages)) {
         return null;
       }
@@ -330,7 +315,6 @@ public class UserToUserChatHelperService {
       List<GetUserToUserMessageResponseDO> sortedMessages =
           allMessages.stream().sorted((t1, t2) -> t1.getSentAt().compareTo(t2.getSentAt()))
               .collect(Collectors.toList());
-      logger.info("sorted message list {}", JacksonUtils.toJson(sortedMessages));
 
       // Get 100 messages only
       // TODO: change limit to 100
@@ -339,7 +323,6 @@ public class UserToUserChatHelperService {
         pageN = sortedMessages.subList(
             sortedMessages.size() - configurator.getInt(PropertyConstants.PAGE_SIZE),
             sortedMessages.size());
-        logger.info("pageN {}", JacksonUtils.toJson(pageN));
 
         GetUserToUserMessagesResponseDO userMessagesDO = new GetUserToUserMessagesResponseDO(pageN);
         return userMessagesDO;
@@ -372,13 +355,9 @@ public class UserToUserChatHelperService {
         activeChatUsersAndLastActiveAtList.add(userAndLastSeenAt);
       }
 
-      logger.info("activeChatUsersAndLastActiveAtList:{}",
-          JacksonUtils.toJson(activeChatUsersAndLastActiveAtList));
-
       List<UserToUserChatResponseDO> userChats = new ArrayList<>();
 
-     
-      for ( int i = 0; i < activeChatUsersAndLastActiveAtList.size(); i++) {
+      for (int i = 0; i < activeChatUsersAndLastActiveAtList.size(); i++) {
         UserActiveChatsDO userActiveChatsDO = activeChatUsersAndLastActiveAtList.get(i);
         String sender = userActiveChatsDO.getAttender();
         Long lastRead = userActiveChatsDO.getLastSeenAt();
@@ -396,13 +375,26 @@ public class UserToUserChatHelperService {
 
         UserToUserChatResponseDO userChatResponseDO = new UserToUserChatResponseDO();
         userChatResponseDO.setSender(sender);
-        userChatResponseDO.setLastSeenAt(TimeConversionUtils.getGMTTime() - lastRead);
+        Long lastMessageTime = TimeConversionUtils.getGMTTime() - lastRead;
+        userChatResponseDO.setLastMessageTime(lastMessageTime);
         userChatResponseDO.setNotificationText(String.format("%s new message(s)", count));
         userChats.add(userChatResponseDO);
       }
-      logger.info("userChats list {}", userChats);
-     
-      GetUserChatsResponseDO getUserChatsResponseDO = new GetUserChatsResponseDO(userChats);
+
+      List<UserToUserChatResponseDO> sortedUserChats = userChats.stream()
+          .sorted((t1, t2) -> t1.getLastMessageTime().compareTo(t2.getLastMessageTime()))
+          .collect(Collectors.toList());
+      logger.info("sorted user chats {}", JacksonUtils.toJson(sortedUserChats));
+      List<UserToUserChatDO> userLatestChats = new ArrayList<>();
+      for (UserToUserChatResponseDO userChat : sortedUserChats) {
+        String lastMessagedAt =
+            TimeConversionUtils.convertTimeIntoString(userChat.getLastMessageTime());
+        UserToUserChatDO chat = new UserToUserChatDO(userChat.getSender(), lastMessagedAt,
+            userChat.getNotificationText());
+        userLatestChats.add(chat);
+      }
+      logger.info("userLatestChats:{}", JacksonUtils.toJson(userLatestChats));
+      GetUserChatsResponseDO getUserChatsResponseDO = new GetUserChatsResponseDO(userLatestChats);
       return getUserChatsResponseDO;
 
     } catch (Exception e) {

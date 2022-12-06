@@ -11,5 +11,5 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 public class GetUserChatsResponseDO {
-  private List<UserToUserChatResponseDO> chats;
+  private List<UserToUserChatDO> chats;
 }

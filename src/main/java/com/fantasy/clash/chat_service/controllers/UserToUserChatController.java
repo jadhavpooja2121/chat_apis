@@ -138,7 +138,6 @@ public class UserToUserChatController extends BaseController {
   
   @GetMapping(value = "/chats", produces = MediaType.APPLICATION_JSON_VALUE)
   public DeferredResult<ResponseEntity<?>> getUserChats(
-      @RequestParam(required = true, defaultValue = "true") boolean isNext,
       HttpServletRequest request) {
     Long startTime = System.currentTimeMillis();
     String apiEndPoint = "/chat_service/user_to_user_chat/chats";
@@ -154,7 +153,7 @@ public class UserToUserChatController extends BaseController {
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-      userToUserChatService.getChats(username, isNext, cf);
+      userToUserChatService.getChats(username, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
       logger.error("Get chats request failed due to {}", StringUtils.printStackTrace(e));

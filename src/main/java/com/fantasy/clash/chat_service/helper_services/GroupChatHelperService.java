@@ -41,8 +41,6 @@ public class GroupChatHelperService {
       Set<TypedTuple<String>> nextMessagesWithScores =
           redis.zrangeByScoreWithScores(RedisConstants.REDIS_ALIAS,
               RedisServiceUtils.contestGroupChatKey(groupChatId), min, max, 1, pageSize);
-      logger.info("membersWithScores {}", nextMessagesWithScores);
-
       if (CollectionUtils.isEmpty(nextMessagesWithScores)) {
         ErrorResponseDO noMessagesResponseDO = new ErrorResponseDO(
             ResponseErrorCodes.NO_NEW_MESSAGES, ResponseErrorMessages.NO_NEW_MESSAGES);
@@ -53,19 +51,12 @@ public class GroupChatHelperService {
       for (TypedTuple<String> val : nextMessagesWithScores) {
         usernameMsgTimestampMap.put(val.getScore(), val.getValue());
       }
-      logger.info("map <time, val> :{}", usernameMsgTimestampMap);
-
       List<Double> userMsgsTimestampList = new ArrayList<>();
       for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
         Double latestTimestamp = valMap.getKey();
-        logger.info("latestTimestamp:{}", latestTimestamp);
         userMsgsTimestampList.add(latestTimestamp);
       }
-      logger.info("userMsgsTimestampList:{}", userMsgsTimestampList);
-
       Long latestReadTime = Collections.max(userMsgsTimestampList).longValue();
-      logger.info("lastRead:{}", latestReadTime);
-
       String userLastReadTime = redis.hget(RedisConstants.REDIS_ALIAS,
           RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username);
       if (StringUtils.isEmpty(userLastReadTime)) {
@@ -80,7 +71,6 @@ public class GroupChatHelperService {
               latestReadTime.toString());
         }
       }
-
       List<GetGroupChatMessageResponseDO> messageList = new ArrayList<>();
       for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
         SaveGroupChatMessageDO saveGroupChatMessageDO =
@@ -89,7 +79,6 @@ public class GroupChatHelperService {
         messageList.add(new GetGroupChatMessageResponseDO(saveGroupChatMessageDO.getUsername(),
             saveGroupChatMessageDO.getMessage(), valMap.getKey().longValue(), isRead));
       }
-      logger.info("messageList {}", JacksonUtils.toJson(messageList));
       cf.complete(
           ResponseEntity.ok(new OkResponseDO<>(new GetGroupChatMessagesResponseDO(messageList))));
       return;
@@ -104,21 +93,16 @@ public class GroupChatHelperService {
       Set<TypedTuple<String>> prevMessagesWithScores =
           redis.zrevrangeByScoreWithScores(RedisConstants.REDIS_ALIAS,
               RedisServiceUtils.contestGroupChatKey(groupChatId), max, min, 1, pageSize);
-      logger.info("membersWithScores {}", prevMessagesWithScores);
-
       if (CollectionUtils.isEmpty(prevMessagesWithScores)) {
         ErrorResponseDO noMessagesResponseDO = new ErrorResponseDO(
             ResponseErrorCodes.NO_LAST_MESSAGES, ResponseErrorMessages.NO_LAST_MESSAGES);
         cf.complete(ResponseEntity.ok(noMessagesResponseDO));
         return;
       }
-
       Map<Double, String> usernameMsgTimestampMap = new TreeMap<Double, String>();
       for (TypedTuple<String> val : prevMessagesWithScores) {
         usernameMsgTimestampMap.put(val.getScore(), val.getValue());
       }
-      logger.info("map <time, val> :{}", usernameMsgTimestampMap);
-
       List<GetGroupChatMessageResponseDO> messageList = new ArrayList<>();
       for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
         SaveGroupChatMessageDO saveGroupChatMessageDO =
@@ -127,7 +111,6 @@ public class GroupChatHelperService {
         messageList.add(new GetGroupChatMessageResponseDO(saveGroupChatMessageDO.getUsername(),
             saveGroupChatMessageDO.getMessage(), valMap.getKey().longValue(), isRead));
       }
-      logger.info("previous messages List {}", JacksonUtils.toJson(messageList));
       cf.complete(
           ResponseEntity.ok(new OkResponseDO<>(new GetGroupChatMessagesResponseDO(messageList))));
       return;
