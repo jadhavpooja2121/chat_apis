@@ -93,8 +93,8 @@ public class GroupChatController extends BaseController {
 
   @GetMapping(value = "/get", produces = MediaType.APPLICATION_JSON_VALUE)
   public DeferredResult<ResponseEntity<?>> getMessage(@PathVariable Long groupChatId,
-      @RequestParam(required = true, defaultValue = "0") Long timestamp,
-      @RequestParam(required = true, defaultValue = "true") boolean isNext,
+      @RequestParam(required = false, defaultValue = "0") Long timestamp,
+      @RequestParam(required = false, defaultValue = "true") boolean isNext,
       HttpServletRequest request) {
     Long startTime = System.currentTimeMillis();
     String apiEndPoint = "/chat_service/group_chats/{groupChatId}/get";

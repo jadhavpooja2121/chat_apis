@@ -96,8 +96,8 @@ public class UserToUserChatController extends BaseController {
 
   @GetMapping(value = "/get", produces = MediaType.APPLICATION_JSON_VALUE)
   public DeferredResult<ResponseEntity<?>> getMessage(@RequestParam(required = true) String sender,
-      @RequestParam(required = true, defaultValue = "0") Long timestamp,
-      @RequestParam(required = true, defaultValue = "true") boolean isNext,
+      @RequestParam(required = false, defaultValue = "0") Long timestamp,
+      @RequestParam(required = false, defaultValue = "true") boolean isNext,
       HttpServletRequest request) {
     Long startTime = System.currentTimeMillis();
     String apiEndPoint = "/chat_service/user_to_user_chat/get";

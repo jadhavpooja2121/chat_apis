@@ -1,3 +1,4 @@
+
 package com.fantasy.clash.chat_service.services;
 
 import java.util.ArrayList;
@@ -7,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -150,16 +152,29 @@ public class GroupChatService {
           RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username);
       Long min = StringUtils.convertToLong(prevReadtime);
       Long max = Long.MAX_VALUE;
-      long messageCnt = redis.zcount(RedisConstants.REDIS_ALIAS,
-          RedisServiceUtils.contestGroupChatKey(groupChatId), min, max);
-      if (messageCnt - 1 == 0) {
+
+      Set<String> members = redis.zrange(RedisConstants.REDIS_ALIAS,
+          RedisServiceUtils.contestGroupChatKey(groupChatId), min, Long.MAX_VALUE);
+
+      List<SaveGroupChatMessageDO> allMessages =
+          members.stream().map(t -> JacksonUtils.fromJson(t, SaveGroupChatMessageDO.class))
+              .collect(Collectors.toList());
+
+      Long messageCnt = 0L;
+      for (SaveGroupChatMessageDO member : allMessages) {
+        if (!member.getUsername().equals(username)) {
+          messageCnt++;
+        }
+      }
+
+      if (messageCnt == 0) {
         ErrorResponseDO noNewMessageREsponseDO = new ErrorResponseDO(
             ResponseErrorCodes.NO_NEW_MESSAGES, ResponseErrorMessages.NO_NEW_MESSAGES);
         cf.complete(ResponseEntity.ok(noNewMessageREsponseDO));
         return;
       }
       GroupChatMessageNotificationDO messageNotificationDO = new GroupChatMessageNotificationDO();
-      messageNotificationDO.setMessageCnt(messageCnt - 1);
+      messageNotificationDO.setMessageCnt(messageCnt);
       cf.complete(ResponseEntity.ok(new OkResponseDO<>(messageNotificationDO)));
     } catch (Exception e) {
       logger.error("Exception due to {}", StringUtils.printStackTrace(e));
