@@ -50,23 +50,21 @@ public class GroupChatService {
   private Configurator configurator;
 
   @Async("apiTaskExecutor")
-  public void sendMessage(Long groupChatId, SaveGroupChatMessageDO saveGroupChatMessageDO,
+  public void sendMessage(Long groupChatId,
+      SendGroupChatMessageResponseDO sendGroupChatMessageResponseDO,
       CompletableFuture<ResponseEntity<?>> cf) {
     try {
       Set<String> members = redis.zrange(RedisConstants.REDIS_ALIAS,
           RedisServiceUtils.contestGroupChatKey(groupChatId), 0D, Long.MAX_VALUE);
       if (CollectionUtils.isEmpty(members)) {
         redis.zadd(RedisConstants.REDIS_ALIAS, RedisServiceUtils.contestGroupChatKey(groupChatId),
-            TimeConversionUtils.getGMTTime(), JacksonUtils.toJson(saveGroupChatMessageDO));
+            TimeConversionUtils.getGMTTime(), JacksonUtils.toJson(sendGroupChatMessageResponseDO));
         redis.expire(RedisConstants.REDIS_ALIAS, RedisServiceUtils.contestGroupChatKey(groupChatId),
             RedisConstants.REDIS_24HRS_KEY_TTL);
       } else {
         redis.zadd(RedisConstants.REDIS_ALIAS, RedisServiceUtils.contestGroupChatKey(groupChatId),
-            TimeConversionUtils.getGMTTime(), JacksonUtils.toJson(saveGroupChatMessageDO));
+            TimeConversionUtils.getGMTTime(), JacksonUtils.toJson(sendGroupChatMessageResponseDO));
       }
-      SendGroupChatMessageResponseDO sendGroupChatMessageResponseDO =
-          new SendGroupChatMessageResponseDO(saveGroupChatMessageDO.getUsername(),
-              saveGroupChatMessageDO.getMessage(), TimeConversionUtils.getGMTTime());
       cf.complete(ResponseEntity.ok(new OkResponseDO<>(sendGroupChatMessageResponseDO)));
     } catch (Exception e) {
       logger.error(StringUtils.printStackTrace(e));

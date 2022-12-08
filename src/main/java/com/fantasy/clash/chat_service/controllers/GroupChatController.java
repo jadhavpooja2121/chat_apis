@@ -18,7 +18,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.async.DeferredResult;
 import com.fantasy.clash.chat_service.dos.SaveGroupChatMessageDO;
 import com.fantasy.clash.chat_service.dos.SendGroupChatMessageDO;
+import com.fantasy.clash.chat_service.dos.SendGroupChatMessageResponseDO;
 import com.fantasy.clash.chat_service.services.GroupChatService;
+import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
 import com.fantasy.clash.chat_service.validators.RequestValidator;
 import com.fantasy.clash.framework.http.constants.ErrorConstants;
 import com.fantasy.clash.framework.http.constants.ErrorMessages;
@@ -72,9 +74,9 @@ public class GroupChatController extends BaseController {
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-      SaveGroupChatMessageDO saveGroupChatMessageDO =
-          new SaveGroupChatMessageDO(username, sendGroupChatMessageDO.getMessage());
-      groupChatService.sendMessage(groupChatId, saveGroupChatMessageDO, cf);
+      SendGroupChatMessageResponseDO sendGroupChatMessageResponseDO = new SendGroupChatMessageResponseDO(username,
+          sendGroupChatMessageDO.getMessage(), TimeConversionUtils.getGMTTime());
+      groupChatService.sendMessage(groupChatId, sendGroupChatMessageResponseDO, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {
       logger.error("Send message request failed due to {}", StringUtils.printStackTrace(e));
