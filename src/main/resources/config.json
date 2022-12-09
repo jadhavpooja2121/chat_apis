@@ -11,5 +11,6 @@
 	"cassandra.fantasy_clash.port": "9042",
 	"message.min.length": "1",
 	"message.max.length": "100",
-	"page.size":"3"
+	"page.size": "3",
+	"user_service.users.accounts": "https://cfcbb12d-3101-44f6-afbe-c267d65c2f76.mock.pstmn.io/v1/users/accounts"
 }
