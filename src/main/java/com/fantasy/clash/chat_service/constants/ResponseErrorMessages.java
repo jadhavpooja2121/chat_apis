@@ -16,4 +16,6 @@ public class ResponseErrorMessages {
   public static final String NO_MESSAGES_IN_CHAT = "No messages in the chat";
   public static final String SENDER_AND_RECIPIENT_SAME = "Sender and recipient cannot be the same";
   public static final String NO_ACTIVE_USER_CHATS = "No active user chats since last 30 days";
+  public static final String USER_DOES_NOT_EXIST = "User does not exist";
+  public static final String UNABLE_TO_FETCH_DATA  = "Couldn't fetch the data";
 }

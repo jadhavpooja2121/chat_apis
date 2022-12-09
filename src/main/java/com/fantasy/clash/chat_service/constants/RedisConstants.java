@@ -10,4 +10,6 @@ public class RedisConstants {
   public static final String CONTEST_GROUP_CHAT_KEY = "r:chat_service:chat";
   public static final Long REDIS_24HRS_KEY_TTL = 24L * 60L * 60L * 1000;
   public static final String USER_LAST_READ_TIMESTAMP_KEY = "r:chat_service:chat:members";
+  public static final String USER_ACCOUNT_KEY = "r:user";
+  public static final Long REDIS_30_DAYS_KEY_TTL = 30L * 24L * 60L * 60L * 1000;
 }

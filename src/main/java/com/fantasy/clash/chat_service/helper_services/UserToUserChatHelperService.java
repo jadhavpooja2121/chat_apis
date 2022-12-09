@@ -87,7 +87,6 @@ public class UserToUserChatHelperService {
       Long user1LastReadtime = null;
       for (Row lastRead : result.all()) {
         user1LastReadtime = lastRead.getLong(0);
-        logger.info("user1LastReadtime:{}", user1LastReadtime);
       }
 
       Statement getUser2LastReadTime =

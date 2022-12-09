@@ -16,7 +16,6 @@ public class UserServiceUtils {
   public String getUsersAccountsUrl() {
     String userServiceGetAccountsUrl =
         configurator.getString(RestClientServiceConstants.USERS_ACCOUNTS);
-    logger.info("url {}", userServiceGetAccountsUrl);
     return userServiceGetAccountsUrl;
   }
 

@@ -16,4 +16,6 @@ public class ResponseErrorCodes {
   public static final Integer NO_MESSAGES_IN_CHAT = 1121;
   public static final Integer SENDER_AND_RECIPIENT_SAME = 1123;
   public static final Integer NO_ACTIVE_USER_CHATS = 1124;
+  public static final Integer USER_DOES_NOT_EXIST = 1130;
+  public static final Integer UNABLE_TO_FETCH_DATA = 1131;
 }

@@ -13,4 +13,7 @@ public class RedisServiceUtils {
     return RedisUtils.getKey(RedisConstants.USER_LAST_READ_TIMESTAMP_KEY, groupChatId, username);
   }
 
+  public static String userAccountKey(String username) {
+    return RedisUtils.getKey(RedisConstants.USER_ACCOUNT_KEY, username);
+  }
 }

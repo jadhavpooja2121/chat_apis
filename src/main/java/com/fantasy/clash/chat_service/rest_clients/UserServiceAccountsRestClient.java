@@ -1,6 +1,7 @@
 package com.fantasy.clash.chat_service.rest_clients;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,7 +13,10 @@ import org.springframework.stereotype.Service;
 import com.datastax.oss.driver.shaded.guava.common.net.HttpHeaders;
 import com.fantasy.clash.chat_service.utils.internal_services.UserServiceUtils;
 import com.fantasy.clash.framework.http.client.RestClient;
+import com.fantasy.clash.framework.http.dos.BaseResponseDO;
+import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
 import com.fantasy.clash.framework.http.dos.OkResponseDO;
+import com.fantasy.clash.framework.object_collection.user_service.dos.UserDO;
 import com.fantasy.clash.framework.object_collection.user_service.dos.UsersDO;
 import com.fantasy.clash.framework.utils.JacksonUtils;
 import com.fantasy.clash.framework.utils.StringUtils;
@@ -28,27 +32,23 @@ public class UserServiceAccountsRestClient {
   @Autowired
   private RestClient restClient;
 
-  public UsersDO getUsersAccounts(UsersDO usersDO) {
+  public BaseResponseDO getUsersAccounts(UsersDO usersDO) {
     try {
-
       String usersAccountsUrl = userServiceUtils.getUsersAccountsUrl();
-      logger.info("usersAccountsUrl {}", usersAccountsUrl);
-
       Map<String, String> headers = new HashMap<String, String>();
       headers.put(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE);
       headers.put("x-mock-match-request-body", "true");
-
       String body = JacksonUtils.toJson(usersDO);
-
       ResponseEntity<?> rawResponse = restClient.post(usersAccountsUrl, headers, body);
-      if (rawResponse.getStatusCode().value() == HttpStatus.OK.value()
-          && StringUtils.isNotNullAndEmpty(rawResponse.getBody().toString())) {
-        OkResponseDO<UsersDO> userAccounts = JacksonUtils.fromJson(rawResponse.getBody().toString(),
-            new TypeReference<OkResponseDO<UsersDO>>() {});
-        logger.info("result {}", userAccounts.result);
-        logger.info("accounts {}", userAccounts.result.getUsers());
-        return userAccounts.result;
+      BaseResponseDO baseResponse =
+          JacksonUtils.fromJson(rawResponse.getBody().toString(), BaseResponseDO.class);
+      if (baseResponse.code != HttpStatus.OK.value()) {
+        return JacksonUtils.fromJson(rawResponse.getBody().toString(), ErrorResponseDO.class);
       }
+      OkResponseDO<UsersDO> userAccounts =
+          JacksonUtils.fromJson(rawResponse.getBody().toString(), OkResponseDO.class);
+      return userAccounts;
+
     } catch (Exception e) {
       logger.error("Exception in get user accounts due to {}", StringUtils.printStackTrace(e));
     }
