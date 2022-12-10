@@ -11,5 +11,5 @@ import lombok.Setter;
 @AllArgsConstructor
 public class UserActiveChatsDO {
   private String attender;
-  private Long lastSeenAt;
+  private Long lastMessageAt;
 }

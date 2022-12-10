@@ -7,12 +7,14 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.cassandra.mapping.Column;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
@@ -26,6 +28,7 @@ import com.datastax.driver.core.querybuilder.Select;
 import com.fantasy.clash.chat_service.constants.CassandraConstants;
 import com.fantasy.clash.chat_service.constants.DatabaseConstants;
 import com.fantasy.clash.chat_service.constants.PropertyConstants;
+import com.fantasy.clash.chat_service.constants.RedisConstants;
 import com.fantasy.clash.chat_service.constants.ResponseErrorCodes;
 import com.fantasy.clash.chat_service.constants.ResponseErrorMessages;
 import com.fantasy.clash.chat_service.dos.GetUserChatsResponseDO;
@@ -35,9 +38,17 @@ import com.fantasy.clash.chat_service.dos.SendUserToUserMessageResponseDO;
 import com.fantasy.clash.chat_service.dos.UserActiveChatsDO;
 import com.fantasy.clash.chat_service.dos.UserToUserChatDO;
 import com.fantasy.clash.chat_service.dos.UserToUserChatResponseDO;
+import com.fantasy.clash.chat_service.rest_clients.UserServiceAccountsRestClient;
+import com.fantasy.clash.chat_service.utils.HashUtils;
+import com.fantasy.clash.chat_service.utils.RedisServiceUtils;
 import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
 import com.fantasy.clash.framework.configuration.Configurator;
+import com.fantasy.clash.framework.http.dos.BaseResponseDO;
 import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
+import com.fantasy.clash.framework.http.dos.OkResponseDO;
+import com.fantasy.clash.framework.object_collection.user_service.dos.UserDO;
+import com.fantasy.clash.framework.object_collection.user_service.dos.UsersDO;
+import com.fantasy.clash.framework.redis.cluster.ClusteredRedis;
 import com.fantasy.clash.framework.utils.JacksonUtils;
 import com.fantasy.clash.framework.utils.StringUtils;
 
@@ -51,6 +62,12 @@ public class UserToUserChatHelperService {
 
   @Autowired
   private Configurator configurator;
+
+  @Autowired
+  private ClusteredRedis redis;
+
+  @Autowired
+  private UserServiceAccountsRestClient userServiceAccountsRestClient;
 
   public SendUserToUserMessageResponseDO saveMessage(String groupChatId, String username,
       String recipient, String message, Long timestamp) {
@@ -345,10 +362,11 @@ public class UserToUserChatHelperService {
           .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
           .where(QueryBuilder.eq(DatabaseConstants.USERNAME1_COLUMN, username));
 
-      ResultSet activeUsersAndLastSeenAt = chatSession.execute(selectActiveUsersAndLastActiveAt);
+      ResultSet activeUsersAndLastActiveTimestamp =
+          chatSession.execute(selectActiveUsersAndLastActiveAt);
 
       List<UserActiveChatsDO> activeChatUsersAndLastActiveAtList = new ArrayList<>();
-      for (Row user : activeUsersAndLastSeenAt.all()) {
+      for (Row user : activeUsersAndLastActiveTimestamp.all()) {
         UserActiveChatsDO userAndLastSeenAt =
             new UserActiveChatsDO(user.getString(0), user.getLong(1));
         activeChatUsersAndLastActiveAtList.add(userAndLastSeenAt);
@@ -359,12 +377,15 @@ public class UserToUserChatHelperService {
       for (int i = 0; i < activeChatUsersAndLastActiveAtList.size(); i++) {
         UserActiveChatsDO userActiveChatsDO = activeChatUsersAndLastActiveAtList.get(i);
         String sender = userActiveChatsDO.getAttender();
-        Long lastRead = userActiveChatsDO.getLastSeenAt();
+        Long lastRead = userActiveChatsDO.getLastMessageAt();
+
+        String groupChatId = HashUtils.getHash(username, sender);
 
         Statement getUserLatestMessages = QueryBuilder.select(DatabaseConstants.MESSAGE_TEXT_COLUMN)
             .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.USER_CHATS_TABLE)
             .allowFiltering()
             .where(QueryBuilder.eq(DatabaseConstants.MESSAGE_SENDER_COLUMN, sender))
+            .and(QueryBuilder.eq(DatabaseConstants.CHAT_IDENTIFIER_COLUMN, groupChatId))
             .and(QueryBuilder.gt(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN, lastRead));
         ResultSet userLatestMessages = chatSession.execute(getUserLatestMessages);
         int count = 0;
@@ -383,16 +404,20 @@ public class UserToUserChatHelperService {
       List<UserToUserChatResponseDO> sortedUserChats = userChats.stream()
           .sorted((t1, t2) -> t1.getLastMessageTime().compareTo(t2.getLastMessageTime()))
           .collect(Collectors.toList());
-      logger.info("sorted user chats {}", JacksonUtils.toJson(sortedUserChats));
+
       List<UserToUserChatDO> userLatestChats = new ArrayList<>();
       for (UserToUserChatResponseDO userChat : sortedUserChats) {
         String lastMessagedAt =
             TimeConversionUtils.convertTimeIntoString(userChat.getLastMessageTime());
-        UserToUserChatDO chat = new UserToUserChatDO(userChat.getSender(), lastMessagedAt,
-            userChat.getNotificationText());
+        UserToUserChatDO chat = new UserToUserChatDO();
+        chat.setSender(userChat.getSender());
+        chat.setLastMessageTime(lastMessagedAt);
+        chat.setNotificationText(userChat.getNotificationText());
         userLatestChats.add(chat);
       }
-      logger.info("userLatestChats:{}", JacksonUtils.toJson(userLatestChats));
+
+      getResponseWithUserImage(userLatestChats);
+
       GetUserChatsResponseDO getUserChatsResponseDO = new GetUserChatsResponseDO(userLatestChats);
       return getUserChatsResponseDO;
 
@@ -400,5 +425,56 @@ public class UserToUserChatHelperService {
       logger.error(StringUtils.printStackTrace(e));
     }
     return null;
+  }
+
+  private List<UserToUserChatDO> getResponseWithUserImage(List<UserToUserChatDO> userLatestChats) {
+    List<String> listOfSenders = new ArrayList<>();
+    for (UserToUserChatDO sender : userLatestChats) {
+      listOfSenders.add(sender.getSender());
+    }
+
+    logger.info("senders list {}", JacksonUtils.toJson(listOfSenders));
+    String imageUrl = "";
+    for (UserToUserChatDO userChatMetaData : userLatestChats) {
+      String userAccount = redis.get(RedisConstants.REDIS_ALIAS,
+          RedisServiceUtils.userAccountKey(userChatMetaData.getSender()));
+      if (StringUtils.isNullOrEmpty(userAccount)) {
+        UsersDO user = new UsersDO();
+        user.setUsernames(listOfSenders);
+        BaseResponseDO baseResponse = userServiceAccountsRestClient.getUsersAccounts(user);
+        if (baseResponse == null || baseResponse.code != HttpStatus.OK.value()) {
+          // cannot throw error response here as it will affect the next processing inside the
+          // loop
+          imageUrl = "http://noImage.png";
+        } else {
+          OkResponseDO<UsersDO> usersAccounts =
+              (OkResponseDO<UsersDO>) userServiceAccountsRestClient.getUsersAccounts(user);
+          UsersDO users =
+              JacksonUtils.fromJson(JacksonUtils.toJson(usersAccounts.result), UsersDO.class);
+          List<UserDO> usersList = users.getUsers();
+
+          Predicate<UserDO> sender =
+              userDO -> (userDO.getUsername().equals(userChatMetaData.getSender()));
+          // Boolean isUserExists = usersList.stream().anyMatch(sender);
+
+          UserDO userInfo = usersList.stream().filter(sender).findAny().get();
+
+          imageUrl = userInfo.getProfile().getImageUrl();
+
+          if (StringUtils.isNotNullAndEmpty(imageUrl)) {
+            // set a default image
+            imageUrl = "http://noImage.png";
+          }
+          redis.setex(RedisConstants.REDIS_ALIAS,
+              RedisServiceUtils.userAccountKey(userChatMetaData.getSender()),
+              JacksonUtils.toJson(userInfo), RedisConstants.REDIS_30_DAYS_KEY_TTL);
+        }
+      } else {
+        UserDO userData = JacksonUtils.fromJson(userAccount, UserDO.class);
+        imageUrl = userData.getProfile().getImageUrl();
+      }
+      userChatMetaData.setImageUrl(imageUrl);
+    }
+    return userLatestChats;
   }
 }
