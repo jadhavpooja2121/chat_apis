@@ -395,6 +395,41 @@ public class UserToUserChatHelperService {
 
         UserToUserChatResponseDO userChatResponseDO = new UserToUserChatResponseDO();
         userChatResponseDO.setSender(sender);
+        // check the sender lastActiveAt, if greater get the timestamp of his last meesage if that
+        // is greater than user last read, change last message time here
+        
+        Statement getSenderLastMessageTime =
+            QueryBuilder.select(DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN)
+                .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
+                .where(QueryBuilder.eq(DatabaseConstants.USERNAME1_COLUMN, sender))
+                .and(QueryBuilder.eq(DatabaseConstants.USERNAME2_COLUMN, username));
+
+        ResultSet getSenderLastMessageTimeResult = chatSession.execute(getSenderLastMessageTime);
+        
+        Long senderLastSentOrReadTime = null;
+        for (Row senderLastRead : getSenderLastMessageTimeResult.all()) {
+          senderLastSentOrReadTime = senderLastRead.getLong(0);
+        }
+        
+        if (lastRead < senderLastSentOrReadTime ) {
+          
+          Statement getSenderMessages =
+              QueryBuilder.select(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN)
+                  .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.USER_CHATS_TABLE)
+                  .where(QueryBuilder.eq(DatabaseConstants.CHAT_IDENTIFIER_COLUMN, groupChatId))
+                  .and(QueryBuilder.gt(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN,
+                      lastRead))
+                  .and(QueryBuilder.in("sender", List.of(sender)));
+          ResultSet getSenderTimestamp = chatSession.execute(getSenderMessages);
+          List<Long> senderMessageTimestamps = new ArrayList<>();
+          for (Row senderTimestamp : getSenderTimestamp.all()) {
+            senderMessageTimestamps.add(senderTimestamp.getLong(0));
+          }
+          if (!CollectionUtils.isEmpty(senderMessageTimestamps)) {      
+          Long lastMessageSentAtBySender = Collections.max(senderMessageTimestamps);
+          lastRead = lastMessageSentAtBySender;
+          }
+        }
         Long lastMessageTime = TimeConversionUtils.getGMTTime() - lastRead;
         userChatResponseDO.setLastMessageTime(lastMessageTime);
         userChatResponseDO.setNotificationText(String.format("%s new message(s)", count));
