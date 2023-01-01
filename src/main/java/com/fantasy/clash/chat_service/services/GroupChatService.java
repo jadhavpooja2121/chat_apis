@@ -75,16 +75,14 @@ public class GroupChatService {
   public void getMessage(Long groupChatId, String username, Long timestamp, boolean isNext,
       CompletableFuture<ResponseEntity<?>> cf) {
     try {
-      String lastReadTimestamp = redis.hget(RedisConstants.REDIS_ALIAS,
-          RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username);
       Long min = timestamp;
       Long max = Long.MAX_VALUE;
       Integer pageSize = configurator.getInt(PropertyConstants.PAGE_SIZE);
-      if (lastReadTimestamp == null) {
+      if (timestamp == 0) {
         // TODO: change count to 100
         Set<TypedTuple<String>> membersWithScores =
             redis.zrangeByScoreWithScores(RedisConstants.REDIS_ALIAS,
-                RedisServiceUtils.contestGroupChatKey(groupChatId), min, max, 0, pageSize);
+                RedisServiceUtils.contestGroupChatKey(groupChatId), min, max, 0, max);
         if (CollectionUtils.isEmpty(membersWithScores)) {
           ErrorResponseDO noMessagesResponseDO = new ErrorResponseDO(
               ResponseErrorCodes.EMPTY_GROUP_CHAT, ResponseErrorMessages.EMPTY_GROUP_CHAT);
@@ -98,30 +96,57 @@ public class GroupChatService {
         List<Double> userMsgsTimestampList = new ArrayList<>();
         for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
           Double latestTimestamp = valMap.getKey();
-          logger.info("latestTimestamp:{}", latestTimestamp);
           userMsgsTimestampList.add(latestTimestamp);
         }
-        Long lastreadtime = Collections.max(userMsgsTimestampList).longValue();
+        Long latestReadTime = Collections.max(userMsgsTimestampList).longValue();
+
         List<GetGroupChatMessageResponseDO> messageList = new ArrayList<>();
-        for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
-          SaveGroupChatMessageDO saveGroupChatMessageDO =
-              JacksonUtils.fromJson(valMap.getValue(), SaveGroupChatMessageDO.class);
-          messageList.add(new GetGroupChatMessageResponseDO(saveGroupChatMessageDO.getUsername(),
-              saveGroupChatMessageDO.getMessage(), valMap.getKey().longValue(), false));
-        }
+
         try {
-          redis.hmget(RedisConstants.REDIS_ALIAS,
+          String lastReadTimestamp = redis.hget(RedisConstants.REDIS_ALIAS,
               RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username);
+          Long userLastReadTimestamp = StringUtils.convertToLong(lastReadTimestamp);
+          if (userLastReadTimestamp < latestReadTime) {
+            redis.hmset(RedisConstants.REDIS_ALIAS,
+                RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username,
+                latestReadTime.toString());
+          }
+          for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
+            SaveGroupChatMessageDO saveGroupChatMessageDO =
+                JacksonUtils.fromJson(valMap.getValue(), SaveGroupChatMessageDO.class);
+            Boolean isRead = valMap.getKey().longValue() <= userLastReadTimestamp ? true : false;
+
+            messageList.add(new GetGroupChatMessageResponseDO(saveGroupChatMessageDO.getUsername(),
+                saveGroupChatMessageDO.getMessage(), valMap.getKey().longValue(), isRead));
+          }
+
         } catch (Exception e) {
           redis.hmset(RedisConstants.REDIS_ALIAS,
               RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username,
-              lastreadtime.toString());
+              latestReadTime.toString());
           redis.expire(RedisConstants.REDIS_ALIAS,
               RedisServiceUtils.userLastReadTimestampKey(groupChatId, username),
               RedisConstants.REDIS_24HRS_KEY_TTL);
+
+          for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
+            SaveGroupChatMessageDO saveGroupChatMessageDO =
+                JacksonUtils.fromJson(valMap.getValue(), SaveGroupChatMessageDO.class);
+            messageList.add(new GetGroupChatMessageResponseDO(saveGroupChatMessageDO.getUsername(),
+                saveGroupChatMessageDO.getMessage(), valMap.getKey().longValue(), false));
+          }
         }
-        cf.complete(
-            ResponseEntity.ok(new OkResponseDO<>(new GetGroupChatMessagesResponseDO(messageList))));
+
+        Integer toIndex = messageList.size();
+        Integer fromIndex = toIndex - pageSize;
+        List<GetGroupChatMessageResponseDO> recentMessages = new ArrayList<>();
+        try {
+          recentMessages = messageList.subList(fromIndex, toIndex);
+        } catch (Exception e) {
+          recentMessages = messageList;
+        }
+
+        cf.complete(ResponseEntity
+            .ok(new OkResponseDO<>(new GetGroupChatMessagesResponseDO(recentMessages))));
         return;
       } else {
         String prevReadtime = redis.hget(RedisConstants.REDIS_ALIAS,

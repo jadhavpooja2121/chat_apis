@@ -179,27 +179,29 @@ public class UserToUserChatHelperService {
 
         List<GetUserToUserMessageResponseDO> sortedMessages =
             allMessages.stream().sorted((t1, t2) -> t1.getSentAt().compareTo(t2.getSentAt()))
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(ArrayList::new));
+   
+        Integer toIndex = sortedMessages.size();
+        Integer fromIndex = toIndex - configurator.getInt(PropertyConstants.PAGE_SIZE);
+        List<GetUserToUserMessageResponseDO> recentMessages = new ArrayList<>();
+        try {
+          recentMessages = sortedMessages.subList(fromIndex, toIndex);
+        } catch(Exception e) {
+          recentMessages = sortedMessages;
+        }
 
-        logger.info("sorted message list {}", JacksonUtils.toJson(sortedMessages));
+        GetUserToUserMessagesResponseDO userMessagesDO =
+            new GetUserToUserMessagesResponseDO(recentMessages);
 
-        // Get 100 messages only
-        // TODO: change limit to 100
+        Long recentMessageTime = sortedMessages.get(toIndex - 1).getSentAt();
 
-        List<GetUserToUserMessageResponseDO> pageN = sortedMessages.stream()
-            .limit(configurator.getInt(PropertyConstants.PAGE_SIZE)).collect(Collectors.toList());
-
-        GetUserToUserMessagesResponseDO userMessagesDO = new GetUserToUserMessagesResponseDO(pageN);
-
-        Long lastRead = pageN.get(pageN.size() - 1).getSentAt();
-
-        if (userLastReadtime < lastRead) {
+        if (userLastReadtime < recentMessageTime) {
           Statement updateActiveChat = QueryBuilder
               .insertInto(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
               .values(
                   List.of(DatabaseConstants.USERNAME1_COLUMN, DatabaseConstants.USERNAME2_COLUMN,
                       DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN),
-                  List.of(username, sender, lastRead))
+                  List.of(username, sender, recentMessageTime))
               .using(QueryBuilder.ttl(CassandraConstants.DEFAULT_CHAT_DATA_EXPIRY_TTL))
               .setConsistencyLevel(ConsistencyLevel.LOCAL_ONE);
           chatSession.execute(updateActiveChat);
@@ -397,7 +399,7 @@ public class UserToUserChatHelperService {
         userChatResponseDO.setSender(sender);
         // check the sender lastActiveAt, if greater get the timestamp of his last meesage if that
         // is greater than user last read, change last message time here
-        
+
         Statement getSenderLastMessageTime =
             QueryBuilder.select(DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN)
                 .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
@@ -405,29 +407,29 @@ public class UserToUserChatHelperService {
                 .and(QueryBuilder.eq(DatabaseConstants.USERNAME2_COLUMN, username));
 
         ResultSet getSenderLastMessageTimeResult = chatSession.execute(getSenderLastMessageTime);
-        
+
         Long senderLastSentOrReadTime = null;
         for (Row senderLastRead : getSenderLastMessageTimeResult.all()) {
           senderLastSentOrReadTime = senderLastRead.getLong(0);
         }
-        
-        if (lastRead < senderLastSentOrReadTime ) {
-          
+
+        if (lastRead < senderLastSentOrReadTime) {
+
           Statement getSenderMessages =
               QueryBuilder.select(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN)
                   .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.USER_CHATS_TABLE)
                   .where(QueryBuilder.eq(DatabaseConstants.CHAT_IDENTIFIER_COLUMN, groupChatId))
-                  .and(QueryBuilder.gt(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN,
-                      lastRead))
+                  .and(
+                      QueryBuilder.gt(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN, lastRead))
                   .and(QueryBuilder.in("sender", List.of(sender)));
           ResultSet getSenderTimestamp = chatSession.execute(getSenderMessages);
           List<Long> senderMessageTimestamps = new ArrayList<>();
           for (Row senderTimestamp : getSenderTimestamp.all()) {
             senderMessageTimestamps.add(senderTimestamp.getLong(0));
           }
-          if (!CollectionUtils.isEmpty(senderMessageTimestamps)) {      
-          Long lastMessageSentAtBySender = Collections.max(senderMessageTimestamps);
-          lastRead = lastMessageSentAtBySender;
+          if (!CollectionUtils.isEmpty(senderMessageTimestamps)) {
+            Long lastMessageSentAtBySender = Collections.max(senderMessageTimestamps);
+            lastRead = lastMessageSentAtBySender;
           }
         }
         Long lastMessageTime = TimeConversionUtils.getGMTTime() - lastRead;
