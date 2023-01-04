@@ -1,0 +1,16 @@
+{
+	"api.version": "1",
+	"redis.standalone.node": "127.0.0.1:8001",
+	"redis.cluster.nodes": "127.0.0.1:8001,127.0.0.1:8002,127.0.0.1:8003,127.0.0.1:8004,127.0.0.1:8005,127.0.0.1:8006",
+	"async.threadpool.maxpoolsize": "20",
+	"async.threadpool.corepoolsize": "5",
+	"async.threadpool.queuecapacity": "5000",
+	"async.threadpool.await.termination.seconds": "60",
+	"cassandra.fantasy_clash.keyspacename": "chat_service",
+	"cassandra.fantasy_clash.contactpoints": "127.0.0.1",
+	"cassandra.fantasy_clash.port": "9042",
+	"message.min.length": "1",
+	"message.max.length": "100",
+	"page.size": "3",
+	"user_service.users.accounts": "https://b9f421b2-2573-4342-8a57-405de9e54150.mock.pstmn.io/v1/users/accounts"
+}
