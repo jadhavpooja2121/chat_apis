@@ -21,20 +21,20 @@ import com.fantasy.clash.chat_service.constants.PropertyConstants;
 import com.fantasy.clash.chat_service.constants.RedisConstants;
 import com.fantasy.clash.chat_service.constants.ResponseErrorCodes;
 import com.fantasy.clash.chat_service.constants.ResponseErrorMessages;
-import com.fantasy.clash.chat_service.dos.GetGroupChatMessagesResponseDO;
-import com.fantasy.clash.chat_service.dos.GroupChatMessageNotificationDO;
-import com.fantasy.clash.chat_service.dos.SaveGroupChatMessageDO;
-import com.fantasy.clash.chat_service.dos.SendGroupChatMessageResponseDO;
-import com.fantasy.clash.chat_service.dos.GetGroupChatMessageResponseDO;
 import com.fantasy.clash.chat_service.helper_services.GroupChatHelperService;
 import com.fantasy.clash.chat_service.utils.RedisServiceUtils;
-import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
 import com.fantasy.clash.framework.configuration.Configurator;
 import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
 import com.fantasy.clash.framework.http.dos.OkResponseDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.GetGroupChatMessageResponseDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.GetGroupChatMessagesResponseDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.GroupChatMessageNotificationDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.SaveGroupChatMessageDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.SendGroupChatMessageResponseDO;
 import com.fantasy.clash.framework.redis.cluster.ClusteredRedis;
 import com.fantasy.clash.framework.utils.JacksonUtils;
 import com.fantasy.clash.framework.utils.StringUtils;
+import com.fantasy.clash.framework.utils.TimeUtils;
 
 @Service
 public class GroupChatService {
@@ -58,16 +58,17 @@ public class GroupChatService {
           RedisServiceUtils.contestGroupChatKey(groupChatId), 0D, Long.MAX_VALUE);
       if (CollectionUtils.isEmpty(members)) {
         redis.zadd(RedisConstants.REDIS_ALIAS, RedisServiceUtils.contestGroupChatKey(groupChatId),
-            TimeConversionUtils.getGMTTime(), JacksonUtils.toJson(sendGroupChatMessageResponseDO));
+            TimeUtils.getGMTTime(), JacksonUtils.toJson(sendGroupChatMessageResponseDO));
         redis.expire(RedisConstants.REDIS_ALIAS, RedisServiceUtils.contestGroupChatKey(groupChatId),
             RedisConstants.REDIS_24HRS_KEY_TTL);
       } else {
         redis.zadd(RedisConstants.REDIS_ALIAS, RedisServiceUtils.contestGroupChatKey(groupChatId),
-            TimeConversionUtils.getGMTTime(), JacksonUtils.toJson(sendGroupChatMessageResponseDO));
+            TimeUtils.getGMTTime(), JacksonUtils.toJson(sendGroupChatMessageResponseDO));
       }
       cf.complete(ResponseEntity.ok(new OkResponseDO<>(sendGroupChatMessageResponseDO)));
     } catch (Exception e) {
-      logger.error(StringUtils.printStackTrace(e));
+      logger.error("Exception occured in sending group chat message due to {}",
+          StringUtils.printStackTrace(e));
     }
   }
 
@@ -99,43 +100,8 @@ public class GroupChatService {
           userMsgsTimestampList.add(latestTimestamp);
         }
         Long latestReadTime = Collections.max(userMsgsTimestampList).longValue();
-
-        List<GetGroupChatMessageResponseDO> messageList = new ArrayList<>();
-
-        try {
-          String lastReadTimestamp = redis.hget(RedisConstants.REDIS_ALIAS,
-              RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username);
-          Long userLastReadTimestamp = StringUtils.convertToLong(lastReadTimestamp);
-          if (userLastReadTimestamp < latestReadTime) {
-            redis.hmset(RedisConstants.REDIS_ALIAS,
-                RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username,
-                latestReadTime.toString());
-          }
-          for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
-            SaveGroupChatMessageDO saveGroupChatMessageDO =
-                JacksonUtils.fromJson(valMap.getValue(), SaveGroupChatMessageDO.class);
-            Boolean isRead = valMap.getKey().longValue() <= userLastReadTimestamp ? true : false;
-
-            messageList.add(new GetGroupChatMessageResponseDO(saveGroupChatMessageDO.getUsername(),
-                saveGroupChatMessageDO.getMessage(), valMap.getKey().longValue(), isRead));
-          }
-
-        } catch (Exception e) {
-          redis.hmset(RedisConstants.REDIS_ALIAS,
-              RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username,
-              latestReadTime.toString());
-          redis.expire(RedisConstants.REDIS_ALIAS,
-              RedisServiceUtils.userLastReadTimestampKey(groupChatId, username),
-              RedisConstants.REDIS_24HRS_KEY_TTL);
-
-          for (Map.Entry<Double, String> valMap : usernameMsgTimestampMap.entrySet()) {
-            SaveGroupChatMessageDO saveGroupChatMessageDO =
-                JacksonUtils.fromJson(valMap.getValue(), SaveGroupChatMessageDO.class);
-            messageList.add(new GetGroupChatMessageResponseDO(saveGroupChatMessageDO.getUsername(),
-                saveGroupChatMessageDO.getMessage(), valMap.getKey().longValue(), false));
-          }
-        }
-
+        List<GetGroupChatMessageResponseDO> messageList = groupChatHelperService
+            .updateIsRead(groupChatId, username, usernameMsgTimestampMap, latestReadTime);
         Integer toIndex = messageList.size();
         Integer fromIndex = toIndex - pageSize;
         List<GetGroupChatMessageResponseDO> recentMessages = new ArrayList<>();
@@ -144,10 +110,8 @@ public class GroupChatService {
         } catch (Exception e) {
           recentMessages = messageList;
         }
-
         cf.complete(ResponseEntity
             .ok(new OkResponseDO<>(new GetGroupChatMessagesResponseDO(recentMessages))));
-        return;
       } else {
         String prevReadtime = redis.hget(RedisConstants.REDIS_ALIAS,
             RedisServiceUtils.userLastReadTimestampKey(groupChatId, username), username);
@@ -164,7 +128,8 @@ public class GroupChatService {
         }
       }
     } catch (Exception e) {
-      logger.error(StringUtils.printStackTrace(e));
+      logger.error("Exception occured while getting group chat messages due to {} ",
+          StringUtils.printStackTrace(e));
     }
   }
 
@@ -177,7 +142,7 @@ public class GroupChatService {
       Long max = Long.MAX_VALUE;
 
       Set<String> members = redis.zrange(RedisConstants.REDIS_ALIAS,
-          RedisServiceUtils.contestGroupChatKey(groupChatId), min, Long.MAX_VALUE);
+          RedisServiceUtils.contestGroupChatKey(groupChatId), min, max);
 
       List<SaveGroupChatMessageDO> allMessages =
           members.stream().map(t -> JacksonUtils.fromJson(t, SaveGroupChatMessageDO.class))
@@ -200,7 +165,8 @@ public class GroupChatService {
       messageNotificationDO.setMessageCnt(messageCnt);
       cf.complete(ResponseEntity.ok(new OkResponseDO<>(messageNotificationDO)));
     } catch (Exception e) {
-      logger.error("Exception due to {}", StringUtils.printStackTrace(e));
+      logger.error("Exception occured while notifying group chat messages due to {}",
+          StringUtils.printStackTrace(e));
     }
   }
 }

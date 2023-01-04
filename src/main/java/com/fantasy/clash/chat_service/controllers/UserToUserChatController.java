@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.async.DeferredResult;
-import com.fantasy.clash.chat_service.dos.SendUserToUserMessageDO;
 import com.fantasy.clash.chat_service.services.UserToUserChatService;
 import com.fantasy.clash.chat_service.validators.RequestValidator;
 import com.fantasy.clash.framework.http.constants.ErrorConstants;
@@ -25,6 +24,7 @@ import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
 import com.fantasy.clash.framework.http.error.responses.ErrorResponse;
 import com.fantasy.clash.framework.http.exceptions.InvalidLoginContextHeaderException;
 import com.fantasy.clash.framework.http.header.dos.LoginContext;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.SendUserToUserMessageDO;
 import com.fantasy.clash.framework.utils.StringUtils;
 
 @RestController

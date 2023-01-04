@@ -20,24 +20,24 @@ import com.fantasy.clash.chat_service.constants.DatabaseConstants;
 import com.fantasy.clash.chat_service.constants.RedisConstants;
 import com.fantasy.clash.chat_service.constants.ResponseErrorCodes;
 import com.fantasy.clash.chat_service.constants.ResponseErrorMessages;
-import com.fantasy.clash.chat_service.dos.GetUserChatsResponseDO;
-import com.fantasy.clash.chat_service.dos.GetUserToUserMessagesResponseDO;
-import com.fantasy.clash.chat_service.dos.SendUserToUserMessageDO;
-import com.fantasy.clash.chat_service.dos.SendUserToUserMessageResponseDO;
 import com.fantasy.clash.chat_service.helper_services.UserToUserChatHelperService;
 import com.fantasy.clash.chat_service.rest_clients.UserServiceAccountsRestClient;
 import com.fantasy.clash.chat_service.utils.HashUtils;
 import com.fantasy.clash.chat_service.utils.RedisServiceUtils;
-import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
 import com.fantasy.clash.framework.http.dos.BaseResponseDO;
 import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
 import com.fantasy.clash.framework.http.dos.OkResponseDO;
 import com.fantasy.clash.framework.http.error.responses.ErrorResponse;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.GetUserChatsResponseDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.GetUserToUserMessagesResponseDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.SendUserToUserMessageDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.SendUserToUserMessageResponseDO;
 import com.fantasy.clash.framework.object_collection.user_service.dos.UserDO;
 import com.fantasy.clash.framework.object_collection.user_service.dos.UsersDO;
 import com.fantasy.clash.framework.redis.cluster.ClusteredRedis;
 import com.fantasy.clash.framework.utils.JacksonUtils;
 import com.fantasy.clash.framework.utils.StringUtils;
+import com.fantasy.clash.framework.utils.TimeUtils;
 import com.fasterxml.jackson.core.type.TypeReference;
 
 @Service
@@ -101,7 +101,7 @@ public class UserToUserChatService {
       String groupChatId = HashUtils.getHash(username, sendUserToUserMessageDO.getRecipient());
       SendUserToUserMessageResponseDO sendUserToUserMessageResponseDO = userToUserChatHelperService
           .saveMessage(groupChatId, username, sendUserToUserMessageDO.getRecipient(),
-              sendUserToUserMessageDO.getMessage(), TimeConversionUtils.getGMTTime());
+              sendUserToUserMessageDO.getMessage(), TimeUtils.getGMTTime());
       if (sendUserToUserMessageResponseDO != null) {
         cf.complete(ResponseEntity.ok(new OkResponseDO<>(sendUserToUserMessageResponseDO)));
         return;

@@ -16,11 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.context.request.async.DeferredResult;
-import com.fantasy.clash.chat_service.dos.SaveGroupChatMessageDO;
-import com.fantasy.clash.chat_service.dos.SendGroupChatMessageDO;
-import com.fantasy.clash.chat_service.dos.SendGroupChatMessageResponseDO;
 import com.fantasy.clash.chat_service.services.GroupChatService;
-import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
 import com.fantasy.clash.chat_service.validators.RequestValidator;
 import com.fantasy.clash.framework.http.constants.ErrorConstants;
 import com.fantasy.clash.framework.http.constants.ErrorMessages;
@@ -29,7 +25,10 @@ import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
 import com.fantasy.clash.framework.http.error.responses.ErrorResponse;
 import com.fantasy.clash.framework.http.exceptions.InvalidLoginContextHeaderException;
 import com.fantasy.clash.framework.http.header.dos.LoginContext;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.SendGroupChatMessageDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.SendGroupChatMessageResponseDO;
 import com.fantasy.clash.framework.utils.StringUtils;
+import com.fantasy.clash.framework.utils.TimeUtils;
 
 @RestController
 @RequestMapping("/v1/chat_service/group_chats/{groupChatId}")
@@ -74,8 +73,9 @@ public class GroupChatController extends BaseController {
         this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
         return df;
       }
-      SendGroupChatMessageResponseDO sendGroupChatMessageResponseDO = new SendGroupChatMessageResponseDO(username,
-          sendGroupChatMessageDO.getMessage(), TimeConversionUtils.getGMTTime());
+      SendGroupChatMessageResponseDO sendGroupChatMessageResponseDO =
+          new SendGroupChatMessageResponseDO(username, sendGroupChatMessageDO.getMessage(),
+              TimeUtils.getGMTTime());
       groupChatService.sendMessage(groupChatId, sendGroupChatMessageResponseDO, cf);
       this.processDeferredResult(df, cf, apiEndPoint, startTime, loginContext.getReqId());
     } catch (Exception e) {

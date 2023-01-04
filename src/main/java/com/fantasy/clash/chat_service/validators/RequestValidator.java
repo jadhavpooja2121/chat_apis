@@ -7,10 +7,10 @@ import org.springframework.stereotype.Service;
 import com.fantasy.clash.chat_service.constants.PropertyConstants;
 import com.fantasy.clash.chat_service.constants.ResponseErrorCodes;
 import com.fantasy.clash.chat_service.constants.ResponseErrorMessages;
-import com.fantasy.clash.chat_service.dos.SendGroupChatMessageDO;
-import com.fantasy.clash.chat_service.dos.SendUserToUserMessageDO;
 import com.fantasy.clash.framework.configuration.Configurator;
 import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.SendGroupChatMessageDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.SendUserToUserMessageDO;
 import com.fantasy.clash.framework.utils.CollectionUtils;
 import com.fantasy.clash.framework.utils.StringUtils;
 

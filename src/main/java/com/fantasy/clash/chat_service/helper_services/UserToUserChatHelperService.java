@@ -3,19 +3,13 @@ package com.fantasy.clash.chat_service.helper_services;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.TreeMap;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.data.cassandra.mapping.Column;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import com.datastax.driver.core.ConsistencyLevel;
@@ -24,33 +18,29 @@ import com.datastax.driver.core.Row;
 import com.datastax.driver.core.Session;
 import com.datastax.driver.core.Statement;
 import com.datastax.driver.core.querybuilder.QueryBuilder;
-import com.datastax.driver.core.querybuilder.Select;
 import com.fantasy.clash.chat_service.constants.CassandraConstants;
 import com.fantasy.clash.chat_service.constants.DatabaseConstants;
 import com.fantasy.clash.chat_service.constants.PropertyConstants;
 import com.fantasy.clash.chat_service.constants.RedisConstants;
-import com.fantasy.clash.chat_service.constants.ResponseErrorCodes;
-import com.fantasy.clash.chat_service.constants.ResponseErrorMessages;
-import com.fantasy.clash.chat_service.dos.GetUserChatsResponseDO;
-import com.fantasy.clash.chat_service.dos.GetUserToUserMessageResponseDO;
-import com.fantasy.clash.chat_service.dos.GetUserToUserMessagesResponseDO;
-import com.fantasy.clash.chat_service.dos.SendUserToUserMessageResponseDO;
-import com.fantasy.clash.chat_service.dos.UserActiveChatsDO;
-import com.fantasy.clash.chat_service.dos.UserToUserChatDO;
-import com.fantasy.clash.chat_service.dos.UserToUserChatResponseDO;
 import com.fantasy.clash.chat_service.rest_clients.UserServiceAccountsRestClient;
 import com.fantasy.clash.chat_service.utils.HashUtils;
 import com.fantasy.clash.chat_service.utils.RedisServiceUtils;
-import com.fantasy.clash.chat_service.utils.TimeConversionUtils;
 import com.fantasy.clash.framework.configuration.Configurator;
 import com.fantasy.clash.framework.http.dos.BaseResponseDO;
-import com.fantasy.clash.framework.http.dos.ErrorResponseDO;
 import com.fantasy.clash.framework.http.dos.OkResponseDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.GetUserChatsResponseDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.GetUserToUserMessageResponseDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.GetUserToUserMessagesResponseDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.SendUserToUserMessageResponseDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.UserActiveChatsDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.UserToUserChatDO;
+import com.fantasy.clash.framework.object_collection.chat_service.dos.UserToUserChatResponseDO;
 import com.fantasy.clash.framework.object_collection.user_service.dos.UserDO;
 import com.fantasy.clash.framework.object_collection.user_service.dos.UsersDO;
 import com.fantasy.clash.framework.redis.cluster.ClusteredRedis;
 import com.fantasy.clash.framework.utils.JacksonUtils;
 import com.fantasy.clash.framework.utils.StringUtils;
+import com.fantasy.clash.framework.utils.TimeUtils;
 
 @Service
 public class UserToUserChatHelperService {
@@ -134,7 +124,8 @@ public class UserToUserChatHelperService {
           new SendUserToUserMessageResponseDO(username, recipient, message, timestamp);
       return sendUserToUserMessageResponseDO;
     } catch (Exception e) {
-      logger.error(StringUtils.printStackTrace(e));
+      logger.error("Exception occured in UserToUserChatHelperService due to {}",
+          StringUtils.printStackTrace(e));
     }
     return null;
   }
@@ -180,13 +171,13 @@ public class UserToUserChatHelperService {
         List<GetUserToUserMessageResponseDO> sortedMessages =
             allMessages.stream().sorted((t1, t2) -> t1.getSentAt().compareTo(t2.getSentAt()))
                 .collect(Collectors.toCollection(ArrayList::new));
-   
+
         Integer toIndex = sortedMessages.size();
         Integer fromIndex = toIndex - configurator.getInt(PropertyConstants.PAGE_SIZE);
         List<GetUserToUserMessageResponseDO> recentMessages = new ArrayList<>();
         try {
           recentMessages = sortedMessages.subList(fromIndex, toIndex);
-        } catch(Exception e) {
+        } catch (Exception e) {
           recentMessages = sortedMessages;
         }
 
@@ -219,7 +210,8 @@ public class UserToUserChatHelperService {
         return prevMessages;
       }
     } catch (Exception e) {
-      logger.error(StringUtils.printStackTrace(e));
+      logger.error("Exception occured in UserToUserChatHelperService due to {}",
+          StringUtils.printStackTrace(e));
     }
     return null;
   }
@@ -288,7 +280,8 @@ public class UserToUserChatHelperService {
       }
       return userMessagesDO;
     } catch (Exception e) {
-      logger.info(StringUtils.printStackTrace(e));
+      logger.error("Exception occured in UserToUserChatHelperService due to {}",
+          StringUtils.printStackTrace(e));
     }
     return null;
   }
@@ -351,7 +344,8 @@ public class UserToUserChatHelperService {
       }
 
     } catch (Exception e) {
-      logger.info(StringUtils.printStackTrace(e));
+      logger.error("Exception occured in UserToUserChatHelperService due to {}",
+          StringUtils.printStackTrace(e));
     }
     return null;
   }
@@ -397,42 +391,8 @@ public class UserToUserChatHelperService {
 
         UserToUserChatResponseDO userChatResponseDO = new UserToUserChatResponseDO();
         userChatResponseDO.setSender(sender);
-        // check the sender lastActiveAt, if greater get the timestamp of his last meesage if that
-        // is greater than user last read, change last message time here
 
-        Statement getSenderLastMessageTime =
-            QueryBuilder.select(DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN)
-                .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
-                .where(QueryBuilder.eq(DatabaseConstants.USERNAME1_COLUMN, sender))
-                .and(QueryBuilder.eq(DatabaseConstants.USERNAME2_COLUMN, username));
-
-        ResultSet getSenderLastMessageTimeResult = chatSession.execute(getSenderLastMessageTime);
-
-        Long senderLastSentOrReadTime = null;
-        for (Row senderLastRead : getSenderLastMessageTimeResult.all()) {
-          senderLastSentOrReadTime = senderLastRead.getLong(0);
-        }
-
-        if (lastRead < senderLastSentOrReadTime) {
-
-          Statement getSenderMessages =
-              QueryBuilder.select(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN)
-                  .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.USER_CHATS_TABLE)
-                  .where(QueryBuilder.eq(DatabaseConstants.CHAT_IDENTIFIER_COLUMN, groupChatId))
-                  .and(
-                      QueryBuilder.gt(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN, lastRead))
-                  .and(QueryBuilder.in("sender", List.of(sender)));
-          ResultSet getSenderTimestamp = chatSession.execute(getSenderMessages);
-          List<Long> senderMessageTimestamps = new ArrayList<>();
-          for (Row senderTimestamp : getSenderTimestamp.all()) {
-            senderMessageTimestamps.add(senderTimestamp.getLong(0));
-          }
-          if (!CollectionUtils.isEmpty(senderMessageTimestamps)) {
-            Long lastMessageSentAtBySender = Collections.max(senderMessageTimestamps);
-            lastRead = lastMessageSentAtBySender;
-          }
-        }
-        Long lastMessageTime = TimeConversionUtils.getGMTTime() - lastRead;
+        Long lastMessageTime = getLastMessagedAt(groupChatId, username, sender, lastRead);
         userChatResponseDO.setLastMessageTime(lastMessageTime);
         userChatResponseDO.setNotificationText(String.format("%s new message(s)", count));
         userChats.add(userChatResponseDO);
@@ -444,8 +404,7 @@ public class UserToUserChatHelperService {
 
       List<UserToUserChatDO> userLatestChats = new ArrayList<>();
       for (UserToUserChatResponseDO userChat : sortedUserChats) {
-        String lastMessagedAt =
-            TimeConversionUtils.convertTimeIntoString(userChat.getLastMessageTime());
+        String lastMessagedAt = TimeUtils.convertTimeIntoString(userChat.getLastMessageTime());
         UserToUserChatDO chat = new UserToUserChatDO();
         chat.setSender(userChat.getSender());
         chat.setLastMessageTime(lastMessagedAt);
@@ -459,9 +418,47 @@ public class UserToUserChatHelperService {
       return getUserChatsResponseDO;
 
     } catch (Exception e) {
-      logger.error(StringUtils.printStackTrace(e));
+      logger.error("Exception occured in UserToUserChatHelperService due to {}",
+          StringUtils.printStackTrace(e));
     }
     return null;
+  }
+
+  private Long getLastMessagedAt(String groupChatId, String username, String sender,
+      Long lastRead) {
+    Statement getSenderLastMessageTime =
+        QueryBuilder.select(DatabaseConstants.LAST_ACTIVE_TIMESTAMP_COLUMN)
+            .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.ACTIVE_CHATS_TABLE)
+            .where(QueryBuilder.eq(DatabaseConstants.USERNAME1_COLUMN, sender))
+            .and(QueryBuilder.eq(DatabaseConstants.USERNAME2_COLUMN, username));
+
+    ResultSet getSenderLastMessageTimeResult = chatSession.execute(getSenderLastMessageTime);
+
+    Long senderLastSentOrReadTime = null;
+    for (Row senderLastRead : getSenderLastMessageTimeResult.all()) {
+      senderLastSentOrReadTime = senderLastRead.getLong(0);
+    }
+
+    if (lastRead < senderLastSentOrReadTime) {
+
+      Statement getSenderMessages =
+          QueryBuilder.select(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN)
+              .from(DatabaseConstants.DEFAULT_KEYSPACE, DatabaseConstants.USER_CHATS_TABLE)
+              .where(QueryBuilder.eq(DatabaseConstants.CHAT_IDENTIFIER_COLUMN, groupChatId))
+              .and(QueryBuilder.gt(DatabaseConstants.MESSAGE_SENT_AT_TIMESTAMP_COLUMN, lastRead))
+              .and(QueryBuilder.in("sender", List.of(sender)));
+      ResultSet getSenderTimestamp = chatSession.execute(getSenderMessages);
+      List<Long> senderMessageTimestamps = new ArrayList<>();
+      for (Row senderTimestamp : getSenderTimestamp.all()) {
+        senderMessageTimestamps.add(senderTimestamp.getLong(0));
+      }
+      if (!CollectionUtils.isEmpty(senderMessageTimestamps)) {
+        Long lastMessageSentAtBySender = Collections.max(senderMessageTimestamps);
+        lastRead = lastMessageSentAtBySender;
+      }
+    }
+    Long lastMessageTime = TimeUtils.getGMTTime() - lastRead;
+    return lastMessageTime;
   }
 
   private List<UserToUserChatDO> getResponseWithUserImage(List<UserToUserChatDO> userLatestChats) {
